@@ -4,6 +4,9 @@ c       MrgAD  -  Merge Ascending & Descending mdex files for a tile
 c                 (some cloning from tftool.f)
 c
 c  version 1.0  B70818: initial version
+c          1.1  B71221: changed handling of aperture photometry; Tom
+c                       says Asce and Desc solutions use same data; use
+c                       simple average (errors ~100% correlated)
 c
 c-----------------------------------------------------------------------
 c
@@ -37,7 +40,7 @@ c
      +               deta, detd, detad, v11, v12, v22, v1, v2
      
 c
-      Data Vsn/'1.0  B70818'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.1  B71221'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -62,7 +65,7 @@ c
         print *
         print *,'The OPTIONAL flag is:'
         print *,'    -d  turn on debug prints'
-        stop
+        call exit(32)
       end if
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -701,17 +704,15 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1sigm
         k = 207
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1sign
-        v1 = R8tmp1**2
-        v2 = R8tmp2**2
+        v1 = (R8tmp1 + R8tmp2)/2.0
         k = 206
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mag2
         k = 40
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mag
-        R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0
         write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
-        R8tmp1 = dsqrt(v1*v2/(v1+v2))
         k = 41
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(Line(IFA(k):IFB(k)),'(F7.3)') v1
         k = 208
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2  !  w1flh
         k = 42
@@ -741,17 +742,15 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2sigm
         k = 212
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2sign
-        v1 = R8tmp1**2
-        v2 = R8tmp2**2
+        v1 = (R8tmp1 + R8tmp2)/2.0
         k = 211
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mag2
         k = 45
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mag
-        R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0
         write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
-        R8tmp1 = dsqrt(v1*v2/(v1+v2))
         k = 46
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(Line(IFA(k):IFB(k)),'(F7.3)') v1
         k = 213
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2  !  w2flh
         k = 47
@@ -784,17 +783,15 @@ c
           read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w?sigm_?
           k = k2 + 1
           read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w?sigm_?2
-          v1 = R8tmp1**2
-          v2 = R8tmp2**2
+          v1 = (R8tmp1 + R8tmp2)/2.0
           k = k2
           read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w?mag_?2
           k = k1
           read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w?mag_?
-          R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
+          R8tmp1 = (R8tmp1+R8tmp2)/2.0
           write(Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
-          R8tmp1 = dsqrt(v1*v2/(v1+v2))
-          k = k1 + 1
-          write(Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+           k = k1 + 1
+          write(Line(IFA(k):IFB(k)),'(F10.3)') v1
           k = k1 + 2
           read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1  !  w?flg_?
           k = k2 + 2
@@ -813,17 +810,15 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1sigP2
         k = 268
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1sigP4
-        v1 = R8tmp1**2
-        v2 = R8tmp2**2
+        v1 = (R8tmp1 + R8tmp2)/2.0
         k = 266
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1magP2
         k = 100
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1magP
-        R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0
         write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
-        R8tmp1 = dsqrt(v1*v2/(v1+v2))
         k = 102
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(Line(IFA(k):IFB(k)),'(F8.3)') v1
         k = 267
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1sigP3
         k = 101
@@ -841,17 +836,15 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2sigP2
         k = 279
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2sigP4
-        v1 = R8tmp1**2
-        v2 = R8tmp2**2
+        v1 = (R8tmp1 + R8tmp2)/2.0
         k = 277
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2magP2
         k = 111
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2magP
-        R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0
         write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
-        R8tmp1 = dsqrt(v1*v2/(v1+v2))
         k = 113
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(Line(IFA(k):IFB(k)),'(F8.3)') v1
         k = 278
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2sigP3
         k = 112
@@ -1091,6 +1084,14 @@ c                                      !       positions; code cloned from above
       Read(Line(IFA(k):IFB(k)), *, err = 3006) sigdec2
       k = 311
       Read(Line(IFA(k):IFB(k)), *, err = 3006) sigraded
+c                                      ! Check for zero-point straddle
+      if (dabs(ra-ra2) .gt. 180.0d0) then
+        if (ra .gt. ra2) then
+          ra = ra - 360.0d0
+        else
+          ra2 = ra2 - 360.0d0        
+        end if
+      end if      
 c      
       oma11 = sigra**2                 ! A & D error covariance matrices
       oma12 = sigradec*dabs(sigradec)
