@@ -7,6 +7,7 @@ c  version 1.0  B70818: initial version
 c          1.1  B71221: changed handling of aperture photometry; Tom
 c                       says Asce and Desc solutions use same data; use
 c                       simple average (errors ~100% correlated)
+c          1.2  B71225: corrected computation of MJDmean variables
 c
 c-----------------------------------------------------------------------
 c
@@ -26,7 +27,8 @@ c
      +               nRow, nBadAst1, nBadAst2, nBadW1Phot1, nBadW1Phot2,
      +               nBadAst, nBadW1Phot, KodeAst, KodePhot1, KodePhot2,
      +               KodePM, nBadPM1, nBadPM2, nBadPM, Itmp1, Itmp2,
-     +               nBadW2Phot, nBadW2Phot1, nBadW2Phot2, NmdetIDerr
+     +               nBadW2Phot, nBadW2Phot1, nBadW2Phot2, NmdetIDerr,
+     +               w1M, w1M2, w2M, w2M2
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
      +               ra2, dec2, sigra2, sigdec2, sigraded,
@@ -40,7 +42,7 @@ c
      +               deta, detd, detad, v11, v12, v22, v1, v2
      
 c
-      Data Vsn/'1.1  B71221'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.2  B71225'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -582,14 +584,16 @@ c
       k = 194
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1rchi22
       k = 99
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1    ! w1M
+      Read(Line(IFA(k):IFB(k)), *, err = 3006) w1M      ! w1M
       k = 265
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2    ! w1M2
-      R8tmp1 = (dfloat(Itmp1)*R8tmp1 + dfloat(Itmp2)*R8tmp2)
-     +       /  dfloat(Itmp1+Itmp2)
-      Itmp1 = Itmp1 + Itmp2
-      k = 28
-      write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+      Read(Line(IFA(k):IFB(k)), *, err = 3006) w1M2     ! w1M2
+      Itmp1 = w1M + w1M2
+      if (Itmp1 .gt. 0) then
+        R8tmp1 = (dfloat(w1M)*R8tmp1 + dfloat(w1M2)*R8tmp2)
+     +         /  dfloat(w1M+w1M2)
+        k = 28
+        write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+      end if                           ! else leave "null"
       k = 99
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
       k = 264
@@ -653,14 +657,16 @@ c
       k = 197
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2rchi22
       k = 110
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1    ! w2M
+      Read(Line(IFA(k):IFB(k)), *, err = 3006) w2M      ! w2M
       k = 276
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2    ! w2M2
-      R8tmp1 = (dfloat(Itmp1)*R8tmp1 + dfloat(Itmp2)*R8tmp2)
-     +       /  dfloat(Itmp1+Itmp2)
-      Itmp1 = Itmp1 + Itmp2
-      k = 31
-      write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+      Read(Line(IFA(k):IFB(k)), *, err = 3006) w2M2     ! w2M2
+      Itmp1 = w2M + w2M2
+      if (Itmp1 .gt. 0) then
+        R8tmp1 = (dfloat(w2M)*R8tmp1 + dfloat(w2M2)*R8tmp2)
+     +         /  dfloat(Itmp1)
+        k = 31
+        write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+      end if                           ! else leave "null"
       k = 110
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
       k = 275
@@ -963,19 +969,24 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmin2
         k = 106
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmin
-        if (R8tmp2 .lt. R8tmp1) 
-     +      Line(IFA(106):IFB(106)) = Line(IFA(272):IFB(272))
+        if (R8tmp2 .lt. R8tmp1) then
+          Line(IFA(106):IFB(106)) = Line(IFA(272):IFB(272))
+          v1 = R8tmp2
+        else
+          v1 = R8tmp1
+        end if
         k = 273
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmax2
         k = 107
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmax
-        if (R8tmp2 .gt. R8tmp1) 
-     +      Line(IFA(107):IFB(107)) = Line(IFA(273):IFB(273))
-        k = 274
-        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmean2
+        if (R8tmp2 .gt. R8tmp1) then
+          Line(IFA(107):IFB(107)) = Line(IFA(273):IFB(273))
+          v2 = R8tmp2
+        else
+          v2 = R8tmp1
+        end if
         k = 108
-        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmean
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
+        R8tmp1 = (v1+v2)/2.0d0        
         write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
       else if (Good2) then
         Line(IFA(106):IFB(108)) = Line(IFA(272):IFB(274))
@@ -988,19 +999,24 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmin2
         k = 117
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmin
-        if (R8tmp2 .lt. R8tmp1) 
-     +      Line(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
+        if (R8tmp2 .lt. R8tmp1) then
+          Line(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
+          v1 = R8tmp2
+        else
+          v2 = R8tmp1
+        end if      
         k = 284
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmax2
         k = 118
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmax
-        if (R8tmp2 .gt. R8tmp1) 
-     +      Line(IFA(118):IFB(118)) = Line(IFA(284):IFB(284))
-        k = 285
-        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmean2
+        if (R8tmp2 .gt. R8tmp1) then
+          Line(IFA(118):IFB(118)) = Line(IFA(284):IFB(284))
+          v2 = R8tmp2
+        else
+          v2 = R8tmp1
+        end if
         k = 119
-        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmean
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
+        R8tmp1 = (v1+v2)/2.0d0        
         write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
       else if (Good2) then
         Line(IFA(117):IFB(119)) = Line(IFA(283):IFB(285))
@@ -1334,8 +1350,11 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1rchi2_pn
         k = 158
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1rchi2_pm
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        if (w1M+w1M2 .gt. 0) then
+          R8tmp1 = (dfloat(w1M)*R8tmp1 + dfloat(w1M2)*R8tmp2)
+     +           /  dfloat(w1M+w1M2)
+          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        end if                         ! else leave "null"
       else if (Good2) then
         Line(IFA(156):IFB(158)) = Line(IFA(322):IFB(324))
       end if
@@ -1362,8 +1381,11 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2rchi2_pn
         k = 161
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2rchi2_pm
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        if (w2M+w2M2 .gt. 0) then
+          R8tmp1 = (dfloat(w2M)*R8tmp1 + dfloat(w2M2)*R8tmp2)
+     +           /  dfloat(w2M+w2M2)
+          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        end if                         ! else leave "null"
       else if (Good2) then
         Line(IFA(159):IFB(161)) = Line(IFA(325):IFB(327))
       end if
@@ -1375,8 +1397,11 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! rchi2_pm2
         k = 162
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! rchi2_pm
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        if (w1M+w2M+w2M2+w2M2 .gt. 0) then
+          R8tmp1 = (dfloat(w1M+w2M)*R8tmp1 + dfloat(w1M2+w2M2)*R8tmp2)
+     +           /  dfloat(w1M+w2M+w2M2+w2M2)
+          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        end if                         ! else leave "null"
       else if (Good2) then
         Line(IFA(162):IFB(162)) = Line(IFA(328):IFB(328))
       end if
