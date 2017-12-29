@@ -89,6 +89,7 @@ c                                      ! input gsa file
           call exit(64)
         end if
         GotIn = .true.
+        if (dbg) print *,'input gsa file: ',InFNam(1:lnblnk(InFNam))
 c                                      ! Turn debug prints on
       else if (Flag .eq. '-D') then
         dbg = .true.
@@ -102,7 +103,9 @@ c                                      ! input ascending stf file
           call exit(64)
         end if
         GotInA = .true.
-c                                      ! input ascending stf file
+        if (dbg) print *,'input ascending stf file: ',
+     +           InFNamA(1:lnblnk(InFNamA))
+c                                      ! input descending stf file
       else if (Flag .eq. '-ID') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,InFNamD)
@@ -111,6 +114,8 @@ c                                      ! input ascending stf file
           call exit(64)
         end if
         GotInD = .true.
+        if (dbg) print *,'input descending stf file: ',
+     +           InFNamD(1:lnblnk(InFNamD))
 c                                      ! output   file
       else if (Flag .eq. '-O') then
         call NextNarg(NArg,Nargs)
