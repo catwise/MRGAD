@@ -9,6 +9,7 @@ c                       says Asce and Desc solutions use same data; use
 c                       simple average (errors ~100% correlated)
 c          1.2  B71225: corrected computation of MJDmean variables;
 c                       removed output header references to band 3
+c                       fixed negative S/N for dEcLong & dEcLat
 c
 c-----------------------------------------------------------------------
 c
@@ -341,8 +342,8 @@ c                                      ! Get ecliptic position offsets
       dEcLat = 3600.0d0*dEcLat
       dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)
       dEcLatSig  = dsqrt(EcLatSig**2  + EcLatSig2**2)
-      dEcLongSNR = dEcLong/dEcLongSig
-      dEcLatSNR  = dEcLat/dEcLatSig
+      dEcLongSNR = dabs(dEcLong)/dEcLongSig
+      dEcLatSNR  = dabs(dEcLat)/dEcLatSig
 c                                      ! Get Average Ecliptic positions     
       EcLong = (EcLong*EcLongSig2**2 + EcLong2*EcLongSig**2)
      +       / (EcLongSig**2 + EcLongSig2**2) 
