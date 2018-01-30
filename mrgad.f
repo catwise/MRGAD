@@ -8,8 +8,11 @@ c          1.1  B71221: changed handling of aperture photometry; Tom
 c                       says Asce and Desc solutions use same data; use
 c                       simple average (errors ~100% correlated)
 c          1.2  B71225: corrected computation of MJDmean variables;
-c                       removed output header references to band 3
-c                       fixed negative S/N for dEcLong & dEcLat
+c                       removed output header references to band 3;
+c          1.3  B71225: fixed negative S/N for dEcLong & dEcLat
+c          1.4  B80127: made dEcLong Desc-Asce to conform to parallax
+c          1.4  B80130: added calculation of median differences in
+c                       ecliptic long/lat and RA/Dec, parallax bias
 c
 c-----------------------------------------------------------------------
 c
@@ -19,7 +22,7 @@ c
       Character*5000 Line
       Character*500  InFNam, OutFNam, InFNamA, InFNamD
       Character*141  EclData
-      Character*25   Field(MaxFld)      
+      Character*25   Field(MaxFld), NumStr
       Character*11   Vsn, Fmt, IFmt
       Character*8    CDate, CTime
       Character*7    ChTmp1, ChTmp2
@@ -41,14 +44,16 @@ c
      +               chi2pmra, chi2pmdec, wad11, wad12, wad22,
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
-     +               deta, detd, detad, v11, v12, v22, v1, v2
-     
+     +               deta, detd, detad, v11, v12, v22, v1, v2, pBias
+      Real*4, allocatable :: MedEclong(:), MedEcLat(:),
+     +               MedRA(:), MedDec(:)
+      Real*4         MedDiff(4)
 c
-      Data Vsn/'1.2  B71225'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.4  B80130'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
-     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/,
+     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/
 c
       Common / VDT / CDate, CTime, Vsn
@@ -69,6 +74,7 @@ c
         print *
         print *,'The OPTIONAL flag is:'
         print *,'    -d  turn on debug prints'
+        print *,'    -pb parallax bias (0)'
         call exit(32)
       end if
 c
@@ -122,6 +128,12 @@ c                                      ! output   file
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,OutFNam)
         GotOut = .true.
+c                                      ! parallax bias
+      else if (Flag .eq. '-PB') then
+        call NextNarg(NArg,Nargs)
+        call GetArg(NArg,NumStr)
+        read (NumStr, *, err=3007) pBias
+        if (dbg) print *, 'parallax bias:', pBias
       Else
         print *,'ERROR: unrecognized command-line specification: '
      +          //Flag0
@@ -162,7 +174,32 @@ c                                      ! Create output table header
       go to 20
 30    if (dbg) print *,'No. of sources: ', nSrc      
       rewind(10)
-c
+c                                      ! Allocate arrays for median diffs
+      allocate(MedEcLong(nSrc))
+      if (.not.allocated(MedEcLong)) then
+        print *,'ERROR: allocation of MedEcLong failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+      allocate(MedEcLat(nSrc))
+      if (.not.allocated(MedEcLat)) then
+        print *,'ERROR: allocation of MedEcLat failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+      allocate(MedRA(nSrc))
+      if (.not.allocated(MedRA)) then
+        print *,'ERROR: allocation of MedRA failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+      allocate(MedDec(nSrc))
+      if (.not.allocated(MedDec)) then
+        print *,'ERROR: allocation of MedDec failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c      
       open (12, file = InFNamA)
       open (14, file = InFNamD)
       open (20, file = OutFNam)
@@ -334,12 +371,13 @@ c
      +           * dcos(d2r*EcLat2) 
       EcLatSig2  = 900.0d0*(EcLatSig2  + AngDiff(EcLat2,  R8tmp2))
 c                                      ! Get ecliptic position offsets      
-      dEcLong = AngDiff(EcLong, EcLong2)
-      if (EcLong .gt. EcLong2) dEcLong = -dEcLong
-      dEcLong = 3600.0d0*dEcLong*dcos(EcLat)
-      dEcLat = AngDiff(EcLat, EcLat2)
-      if (EcLat .gt. EcLat2) dEcLat = -dEcLat
-      dEcLat = 3600.0d0*dEcLat
+      dEcLong = EcLong2 - EcLong       ! use Desc-Asce for parallax
+      if (dEcLong .gt.  180.0d0) dEcLong = dEcLong - 360.0d0
+      if (dEcLong .lt. -180.0d0) dEcLong = dEcLong + 360.0d0
+      dEcLong = 3600.0d0*dEcLong*dcos(d2r*EcLat) - pBias
+      MedEcLong(nRow) = dEcLong
+      dEcLat = 3600.0d0*(EcLat2 - EcLat)
+      MedEcLat(nRow) = dEcLat
       dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)
       dEcLatSig  = dsqrt(EcLatSig**2  + EcLatSig2**2)
       dEcLongSNR = dabs(dEcLong)/dEcLongSig
@@ -353,7 +391,12 @@ c                                      ! Get Average Ecliptic positions
      +          /     (EcLongSig**2 + EcLongSig2**2))
       EcLatSig  = sqrt(EcLatSig**2 * EcLatSig2**2
      +          /     (EcLatSig**2 + EcLatSig2**2))
-     
+c     
+      R8tmp1 = ra2 - ra
+      if (R8tmp1 .gt.  180.0d0) R8tmp1 = R8tmp1 - 360.0d0
+      if (R8tmp1 .lt. -180.0d0) R8tmp1 = R8tmp1 + 360.0d0
+      MedRA(nRow) = 3600.0d0*R8tmp1*dcos(d2r*dec)
+      MedDec(nRow) = 3600.0d0*(dec2 - dec)    
 c                                      ! Get averaged RA & Dec
       oma11 = sigra**2                 ! A & D error covariance matrices
       oma12 = sigradec*dabs(sigradec)
@@ -408,7 +451,7 @@ c
       Good2 = index(Line(IFA(330):IFB(331)),'null') .eq. 0
       if (Good1 .and. Good2) then
         read (Line(IFA(164):IFB(164)), *, err = 1050) Itmp1 ! nIters_pm
-        read (Line(IFA(330):IFB(330)), *, err = 1050) Itmp2 ! nIters_pm
+        read (Line(IFA(330):IFB(330)), *, err = 1050) Itmp2 ! nIters_pn
         if (Itmp2 .gt. Itmp1)
      +      Line(IFA(164):IFB(164)) = Line(IFA(330):IFB(330))
         read (Line(IFA(165):IFB(165)), *, err = 1050) Itmp1 ! nSteps_pm
@@ -1443,7 +1486,8 @@ c
      +  print *,'No. of bad ascending AND descending rows:',
      +  nBadW1Phot1+nBadW1Phot2-nBadW1Phot
       end if
-      print *,'No. data rows with bad W2 photometry passed through:   ',
+      print *,
+     + 'No. data rows with bad W2 photometry passed through:      ',
      +         nBadW2Phot
       if (nBadW2Phot .gt. 0) then
         print *,'No. of bad ascending rows: ',nBadW2Phot1
@@ -1462,6 +1506,38 @@ c
      +  nBadPM1+nBadPM2-nBadPM
       end if
       print *,'No. data rows with mdetID mismatch:', NmdetIDerr
+c
+      call TJsort(nSrc, MedEcLong)      
+      call TJsort(nSrc, MedEcLat)      
+      call TJsort(nSrc, MedRA)      
+      call TJsort(nSrc, MedDec)
+      k = nSrc/2
+      if (mod(nSrc,2) .eq. 1) then
+        MedDiff(1) = MedEcLong(k+1) 
+        MedDiff(2) = MedEcLat(k+1) 
+        MedDiff(3) = MedRA(k+1) 
+        MedDiff(4) = MedDec(k+1) 
+      else
+        MedDiff(1) = (MedEcLong(k)+MedEcLong(k+1) )/2.0
+        MedDiff(2) = (MedEcLat(k)+MedEcLat(k+1) )/2.0
+        MedDiff(3) = (MedRA(k)+MedRA(k+1) )/2.0
+        MedDiff(4) = (MedDec(k)+MedDec(k+1) )/2.0
+      end if
+      print *
+      print *,'Median position offsets (descending-ascending, asec)'
+      write(6,'('' Ecliptic Longitude:'',F10.5$)') MedDiff(1)+pBias
+      if (pBias .ne. 0.0d0) then
+        write(6,'(''; after bias correction:'',F9.5)') MedDiff(1)
+      else
+        print *
+      end if
+      write(6,'('' Ecliptic Latitude: '',F10.5)') MedDiff(2)
+      write(6,'('' Right Ascension:   '',F10.5)') MedDiff(3)
+      write(6,'('' Declination:       '',F10.5)') MedDiff(4)
+      print *
+      if (dbg) print *,'corresponding radial offsets:',
+     + sqrt(MedDiff(1)**2+MedDiff(2)**2),
+     + sqrt(MedDiff(3)**2+MedDiff(4)**2)
 c
       call signoff('mrgad')
       stop
@@ -1507,6 +1583,10 @@ c
       print *,'        Numeric field: "',Line(IFA(k):IFB(k)),'"'
       call exit(64)
       stop
+c
+3007  print *,'ERROR: bad specification for "-pb":', NumStr
+      call exit(64)
+      stop
 c      
       end
 c
@@ -1523,10 +1603,10 @@ c
 c
 c-----------------------------------------------------------------------
 c
-      cRA   = cos(d2r*RA)
-      cDec  = cos(d2r*Dec)
-      sRA   = sin(d2r*RA)
-      sDec  = sin(d2r*Dec)
+      cRA   = dcos(d2r*RA)
+      cDec  = dcos(d2r*Dec)
+      sRA   = dsin(d2r*RA)
+      sDec  = dsin(d2r*Dec)
 c
       X =  sDec
       Y = -cDec*sRA
@@ -1536,8 +1616,8 @@ c
       Y2 = -X*Sob + Y*Cob
 c     Z2 =  Z
 c
-      Lat  = asin(X2)/d2r
-      Long = atan2(-Y2,Z)/d2r
+      Lat  = dasin(X2)/d2r
+      Long = datan2(-Y2,Z)/d2r
       if (Long .lt. 0.0) Long = Long + 360.0
 c
       return
@@ -1730,4 +1810,46 @@ c
       return
 c      
       end
-      
+c
+C=======================================================================
+c                                  Sort for real*4 array
+c                                  from Numerical Recipes via T. Jarrett
+      SUBROUTINE TJSORT(N,RA)
+c
+      Integer*4 N,L,IR,J,I
+      Real*4 RA(N),RRA
+c
+      if (n .lt. 2) return
+      L=N/2+1
+      IR=N
+10    CONTINUE
+        IF(L.GT.1)THEN
+          L=L-1
+          RRA=RA(L)
+        ELSE
+          RRA=RA(IR)
+          RA(IR)=RA(1)
+          IR=IR-1
+          IF(IR.EQ.1)THEN
+            RA(1)=RRA
+            RETURN
+          ENDIF
+        ENDIF
+        I=L
+        J=L+L
+20      IF(J.LE.IR)THEN
+          IF(J.LT.IR)THEN
+            IF(RA(J).LT.RA(J+1))J=J+1
+          ENDIF
+          IF(RRA.LT.RA(J))THEN
+            RA(I)=RA(J)
+            I=J
+            J=J+J
+          ELSE
+            J=IR+1
+          ENDIF
+        GO TO 20
+        ENDIF
+        RA(I)=RRA
+      GO TO 10
+      END
