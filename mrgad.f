@@ -13,6 +13,7 @@ c          1.3  B71225: fixed negative S/N for dEcLong & dEcLat
 c          1.4  B80127: made dEcLong Desc-Asce to conform to parallax
 c          1.4  B80130: added calculation of median differences in
 c                       ecliptic long/lat and RA/Dec, parallax bias
+c          1.5  B80202: added photometric discrepancy columns to output
 c
 c-----------------------------------------------------------------------
 c
@@ -22,6 +23,7 @@ c
       Character*5000 Line
       Character*500  InFNam, OutFNam, InFNamA, InFNamD
       Character*141  EclData
+      Character*29   dMagData
       Character*25   Field(MaxFld), NumStr
       Character*11   Vsn, Fmt, IFmt
       Character*8    CDate, CTime
@@ -44,12 +46,13 @@ c
      +               chi2pmra, chi2pmdec, wad11, wad12, wad22,
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
-     +               deta, detd, detad, v11, v12, v22, v1, v2, pBias
+     +               deta, detd, detad, v11, v12, v22, v1, v2, pBias,
+     +               dwmpro
       Real*4, allocatable :: MedEclong(:), MedEcLat(:),
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.4  B80130'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.5  B80202'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -241,26 +244,26 @@ c                                          ! verify fields in gsa file
       call ChkFld(Field(171),'sigra2',171)
       call ChkFld(Field(172),'sigdec2',172)
       call ChkFld(Field(173),'sigraded',173)
-c
-      write (20, '(a)') Line(1:1556)
+c                                      ! append to input header lines
+      write (20, '(a)') Line(1:1556)//'dw1mag|rch2w1|dw2mag|rch2w2|'
      +       //'  EcLong  | EcLongSig|  EcLat   | EcLatSig|'
      +       //'  dEcLong |dEcLongSig|  dEcLat  |dEcLatSig|'
      +       //'dEcLongSNR| dEcLatSNR| chi2pmra|chi2pmdec|'
      +       //'ka|k1|k2|km|m|'
       read (10, '(a)', end=3000) Line
-      write (20, '(a)') Line(1:1556)
+      write (20, '(a)') Line(1:1556)//'   r  |   r  |   r  |   r  |'
      +       //'    r     |     r    |     r    |    r    |'
      +       //'    r     |     r    |     r    |    r    |'
      +       //'    r     |     r    |    r    |     r   |'
      +       //' i| i| i| i|c|'
       read (10, '(a)', end=3000) Line
-      write (20, '(a)') Line(1:1556)
+      write (20, '(a)') Line(1:1556)//'  mag |   -  |  mag |   -  |'
      +       //'   deg    |   asec   |    deg   |   asec  |'
      +       //'   asec   |   asec   |   asec   |   asec  |'
      +       //'     -    |     -    |    -    |    -    |'
      +       //' -| -| -| -|-|'
       read (10, '(a)', end=3000) Line
-      write (20, '(a)') Line(1:1556)
+      write (20, '(a)') Line(1:1556)//' null | null | null | null |'
      +       //'   null   |   null   |   null   |   null  |'
      +       //'   null   |   null   |   null   |   null  |'
      +       //'   null   |   null   |   null  |   null  |'
@@ -295,7 +298,7 @@ c
       else
         nBadAst1 = nBadAst1 + 1
         nBadAst2 = nBadAst2 + 1
-        KodeAst  = 0     
+        KodeAst  = 0
         EclData = '   null        null      null       null     '
      +        //' null       null       null       null   '
      +        //'   null       null       null      null    0  n  n  n x'
@@ -590,6 +593,7 @@ c
       Good2 = Good2 .and. index(Line(IFA(264):IFB(265)),  'null') .eq. 0
       Good2 = Good2 .and. index(Line(IFA(265):IFB(265)),  '0') .eq. 0
       if (Good1 .and. Good2) go to 1250
+      dMagData = '  null   null   null   null  '
       nBadW1Phot = nBadW1Phot + 1
       If (Good2) then
         nBadW1Phot1 = nBadW1Phot1 + 1
@@ -626,11 +630,13 @@ c
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1mprp
       k = 26
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1mpro
+      dwmpro = R8tmp1 - R8tmp2
       R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
       write (Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 27
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+      write (dMagData(1:14),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
 c      
       k = 28
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1rchi2
@@ -699,11 +705,13 @@ c
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2mprp
       k = 29
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2mpro
+      dwmpro = R8tmp1 - R8tmp2
       R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
       write (Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 30
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+      write (dMagData(15:28),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
 c      
       k = 31
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2rchi2
@@ -1464,11 +1472,11 @@ c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Output data row
 c
-      write (20,'(a)') Line(1:1556)//EclData
+      write (20,'(a)') Line(1:1555)//dMagData//EclData
 c     
       if (nRow .lt. nSrc) go to 1000
 c
-      print *,'No. data rows with bad astrometry passed through:   ',
+      print *,'No. data rows with bad astrometry passed through:      ',
      +         nBadAst
       if (nBadAst .gt. 0) then
         print *,'No. of bad ascending rows: ',nBadAst1
@@ -1487,7 +1495,7 @@ c
      +  nBadW1Phot1+nBadW1Phot2-nBadW1Phot
       end if
       print *,
-     + 'No. data rows with bad W2 photometry passed through:      ',
+     + 'No. data rows with bad W2 photometry passed through:   ',
      +         nBadW2Phot
       if (nBadW2Phot .gt. 0) then
         print *,'No. of bad ascending rows: ',nBadW2Phot1
@@ -1496,7 +1504,8 @@ c
      +  print *,'No. of bad ascending AND descending rows:',
      +  nBadW2Phot1+nBadW2Phot2-nBadW2Phot
       end if
-      print *,'No. data rows with bad proper motion passed through:',
+      print *,
+     + 'No. data rows with bad proper motion passed through:   ',
      +         nBadPM
       if (nBadPM .gt. 0) then
         print *,'No. of bad ascending rows: ',nBadPM1
@@ -1505,7 +1514,8 @@ c
      +  print *,'No. of bad ascending AND descending rows:',
      +  nBadPM1+nBadPM2-nBadPM
       end if
-      print *,'No. data rows with mdetID mismatch:', NmdetIDerr
+      print *,'No. data rows with mdetID mismatch:      ',
+     +      NmdetIDerr
 c
       call TJsort(nSrc, MedEcLong)      
       call TJsort(nSrc, MedEcLat)      
