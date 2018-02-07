@@ -14,6 +14,7 @@ c          1.4  B80127: made dEcLong Desc-Asce to conform to parallax
 c          1.4  B80130: added calculation of median differences in
 c                       ecliptic long/lat and RA/Dec, parallax bias
 c          1.5  B80202: added photometric discrepancy columns to output
+c          1.6  B80207: bulletproofed rchi2, na, nb
 c
 c-----------------------------------------------------------------------
 c
@@ -52,7 +53,7 @@ c
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.5  B80202'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.6  B80207'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -743,26 +744,44 @@ c                                      ! update EclData for KodePhot
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                            ! Process remaining photometric parameters
-      k = 198
-      read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2 ! rchi22
-      k = 32
-      read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1 ! rchi2
-      R8tmp1 = (R8tmp1+R8tmp2)/2.0d0         ! assume equal Ndf
-      write(Line(IFA(k):IFB(k)),'(1pE11.3)') R8tmp1
+      Good1 = index(Line(IFA(32):IFB(32)),  'null') .eq. 0
+      Good2 = index(Line(IFA(198):IFB(198)),'null') .eq. 0
+      if (Good1 .and. Good2) then
+        k = 198
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2 ! rchi22
+        k = 32
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1 ! rchi2
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0         ! assume equal Ndf
+        write(Line(IFA(k):IFB(k)),'(1pE11.3)') R8tmp1
+      else if (Good2) then
+        Line(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
+      end if
 c     
-      k = 199
-      read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp2 ! nb2
-      k = 33
-      read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! nb
-      if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
-      write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+      Good1 = index(Line(IFA(33):IFB(33)),  'null') .eq. 0
+      Good2 = index(Line(IFA(199):IFB(199)),'null') .eq. 0
+      if (Good1 .and. Good2) then
+        k = 199
+        read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp2 ! nb2
+        k = 33
+        read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! nb
+        if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
+        write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+      else if (Good2) then
+        Line(IFA(33):IFB(33)) = Line(IFA(199):IFB(199))
+      end if
 c
-      k = 200     
-      read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp2 ! na2
-      k = 34
-      read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! na
-      if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
-      write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+      Good1 = index(Line(IFA(34):IFB(34)),  'null') .eq. 0
+      Good2 = index(Line(IFA(200):IFB(200)),'null') .eq. 0
+      if (Good1 .and. Good2) then
+        k = 200     
+        read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp2 ! na2
+        k = 34
+        read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! na
+        if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
+        write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+      else if (Good2) then
+        Line(IFA(34):IFB(34)) = Line(IFA(200):IFB(200))
+      end if
 c
       Good1 = index(Line(IFA(40):IFB(44)),'null')   .eq. 0 ! w1mag-w1mcor
       Good2 = index(Line(IFA(206):IFB(210)),'null') .eq. 0 ! w1mag2-w1mcos
