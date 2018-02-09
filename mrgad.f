@@ -15,6 +15,7 @@ c          1.4  B80130: added calculation of median differences in
 c                       ecliptic long/lat and RA/Dec, parallax bias
 c          1.5  B80202: added photometric discrepancy columns to output
 c          1.6  B80207: bulletproofed rchi2, na, nb
+c          1.7  B80209: added outlier rejection based on chi-squares
 c
 c-----------------------------------------------------------------------
 c
@@ -36,8 +37,9 @@ c
      +               nBadAst, nBadW1Phot, KodeAst, KodePhot1, KodePhot2,
      +               KodePM, nBadPM1, nBadPM2, nBadPM, Itmp1, Itmp2,
      +               nBadW2Phot, nBadW2Phot1, nBadW2Phot2, NmdetIDerr,
-     +               w1M, w1M2, w2M, w2M2
-      Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2
+     +               w1M, w1M2, w2M, w2M2, nBadPMCh1, nBadPMCh2
+      Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
+     +               GoodCh1, GoodCh2 
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
      +               ra2, dec2, sigra2, sigdec2, sigraded,
      +               EcLong, EcLat, EcLong2, EcLat2, EcLongSig,
@@ -48,17 +50,18 @@ c
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
      +               deta, detd, detad, v11, v12, v22, v1, v2, pBias,
-     +               dwmpro
+     +               dwmpro, ChiSqRat
       Real*4, allocatable :: MedEclong(:), MedEcLat(:),
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.6  B80207'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.7  B80209'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
      +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
-     +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/
+     +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
+     +     nBadPMCh1,nBadPMCh2/2*0/
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -76,7 +79,8 @@ c
         print *,'    -ia name of the ascending stf file'
         print *,'    -id name of the descending stf file'
         print *
-        print *,'The OPTIONAL flag is:'
+        print *,'The OPTIONAL flags are:'
+        print *,'    -cr maximum chi-square ratio for averaging (3.0)'
         print *,'    -d  turn on debug prints'
         print *,'    -pb parallax bias (0)'
         call exit(32)
@@ -138,6 +142,12 @@ c                                      ! parallax bias
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3007) pBias
         if (dbg) print *, 'parallax bias:', pBias
+c                                      ! parallax bias
+      else if (Flag .eq. '-CR') then
+        call NextNarg(NArg,Nargs)
+        call GetArg(NArg,NumStr)
+        read (NumStr, *, err=3008) ChiSqRat
+        if (dbg) print *, 'max chi-square ratio:', ChiSqRat
       Else
         print *,'ERROR: unrecognized command-line specification: '
      +          //Flag0
@@ -275,8 +285,27 @@ c                                      ! Process each data line
 1000  nRow = nRow + 1
       read (10, '(a)', end=3005) Line
 c                                      ! Check astrometric parameters
-      Good1 = index(Line(IFA(3):IFB(7)),    'null') .eq. 0
-      Good2 = index(Line(IFA(169):IFB(173)),'null') .eq. 0
+      GoodCh1 = index(Line(IFA(32):IFB(32)),  'null') .eq. 0
+      GoodCh2 = index(Line(IFA(198):IFB(198)),'null') .eq. 0
+      if (GoodCh1 .and. GoodCh2) then
+        k = 198
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2 ! rchi22
+        k = 32
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1 ! rchi2
+        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
+     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
+          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+          GoodCh2 = .not.GoodCh1
+        else
+          R8tmp1 = (R8tmp1+R8tmp2)/2.0d0         ! assume equal Ndf
+          write(Line(IFA(k):IFB(k)),'(1pE11.3)') R8tmp1
+        end if
+      else if (GoodCh2) then
+        Line(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
+      end if
+c
+      Good1 = GoodCh1 .and. index(Line(IFA(3):IFB(7)),    'null') .eq. 0
+      Good2 = GoodCh2 .and. index(Line(IFA(169):IFB(173)),'null') .eq. 0
 c
       if (Good1 .and. Good2) go to 1040
       nBadAst = nBadAst + 1
@@ -586,13 +615,26 @@ c
       end if
 c
 c                                      ! WPRO Photometry
+      GoodCh1 = index(Line(IFA(28):IFB(28)),  'null') .eq. 0  ! w1rchi2
+      GoodCh2 = index(Line(IFA(194):IFB(194)),'null') .eq. 0  ! w1rchi22
+1245  if (GoodCh1 .and. GoodCh2) then
+        k = 28
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1rchi2
+        k = 194
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1rchi22
+        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
+     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
+          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+          GoodCh2 = .not.GoodCh1
+        end if
+      end if
 c
-      Good1 = index(Line(IFA(26):IFB(28)),  'null') .eq. 0
-      Good1 = Good1 .and. index(Line(IFA(98):IFB(99)),  'null') .eq. 0
-      Good1 = Good1 .and. index(Line(IFA(99):IFB(99)),  '0') .eq. 0
-      Good2 = index(Line(IFA(192):IFB(194)),'null') .eq. 0
-      Good2 = Good2 .and. index(Line(IFA(264):IFB(265)),  'null') .eq. 0
-      Good2 = Good2 .and. index(Line(IFA(265):IFB(265)),  '0') .eq. 0
+      Good1 = GoodCh1 .and. index(Line(IFA(26):IFB(27)),  'null') .eq. 0
+      Good1 = Good1   .and. index(Line(IFA(98):IFB(99)),  'null') .eq. 0
+      Good1 = Good1   .and. index(Line(IFA(99):IFB(99)),     '0') .eq. 0
+      Good2 = GoodCh2 .and. index(Line(IFA(192):IFB(193)),'null') .eq. 0
+      Good2 = Good2   .and. index(Line(IFA(264):IFB(265)),'null') .eq. 0
+      Good2 = Good2   .and. index(Line(IFA(265):IFB(265)),   '0') .eq. 0
       if (Good1 .and. Good2) go to 1250
       dMagData = '  null   null   null   null  '
       nBadW1Phot = nBadW1Phot + 1
@@ -639,10 +681,6 @@ c
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
       write (dMagData(1:14),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
 c      
-      k = 28
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1rchi2
-      k = 194
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1rchi22
       k = 99
       Read(Line(IFA(k):IFB(k)), *, err = 3006) w1M      ! w1M
       k = 265
@@ -663,12 +701,26 @@ c
       Itmp1 = Itmp1 + Itmp2
       write (Line(IFA(k):IFB(k)),'(I7)') Itmp1
 
-1260  Good1 = index(Line(IFA(29):IFB(31)),  'null') .eq. 0
-      Good1 = Good1 .and. index(Line(IFA(109):IFB(110)),  'null') .eq. 0
-      Good1 = Good1 .and. index(Line(IFA(110):IFB(110)),  '0') .eq. 0
-      Good2 = index(Line(IFA(195):IFB(197)),'null') .eq. 0
-      Good2 = Good2 .and. index(Line(IFA(275):IFB(276)),  'null') .eq. 0
-      Good2 = Good2 .and. index(Line(IFA(276):IFB(276)),  '0') .eq. 0
+1260  GoodCh1 = index(Line(IFA(31):IFB(31)),  'null') .eq. 0  ! w2rchi2
+      GoodCh2 = index(Line(IFA(197):IFB(197)),'null') .eq. 0  ! w2rchi22
+      if (GoodCh1 .and. GoodCh2) then     
+        k = 31
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2rchi2
+        k = 197
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2rchi22
+        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
+     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
+          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+          GoodCh2 = .not.GoodCh1
+        end if
+      end if
+c
+      Good1 = GoodCh1 .and. index(Line(IFA(29):IFB(31)),  'null') .eq. 0
+      Good1 = Good1   .and. index(Line(IFA(109):IFB(110)),'null') .eq. 0
+      Good1 = Good1   .and. index(Line(IFA(110):IFB(110)),   '0') .eq. 0
+      Good2 = GoodCh2 .and. index(Line(IFA(195):IFB(197)),'null') .eq. 0
+      Good2 = Good2   .and. index(Line(IFA(275):IFB(276)),'null') .eq. 0
+      Good2 = Good2   .and. index(Line(IFA(276):IFB(276)),   '0') .eq. 0
       if (Good1 .and. Good2) go to 1270
       nBadW2Phot = nBadW2Phot + 1
       If (Good2) then
@@ -713,11 +765,6 @@ c
       k = 30
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
       write (dMagData(15:28),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
-c      
-      k = 31
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2rchi2
-      k = 197
-      Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2rchi22
       k = 110
       Read(Line(IFA(k):IFB(k)), *, err = 3006) w2M      ! w2M
       k = 276
@@ -744,18 +791,6 @@ c                                      ! update EclData for KodePhot
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                            ! Process remaining photometric parameters
-      Good1 = index(Line(IFA(32):IFB(32)),  'null') .eq. 0
-      Good2 = index(Line(IFA(198):IFB(198)),'null') .eq. 0
-      if (Good1 .and. Good2) then
-        k = 198
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2 ! rchi22
-        k = 32
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1 ! rchi2
-        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0         ! assume equal Ndf
-        write(Line(IFA(k):IFB(k)),'(1pE11.3)') R8tmp1
-      else if (Good2) then
-        Line(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
-      end if
 c     
       Good1 = index(Line(IFA(33):IFB(33)),  'null') .eq. 0
       Good2 = index(Line(IFA(199):IFB(199)),'null') .eq. 0
@@ -1122,8 +1157,36 @@ c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Process proper motion parameters
 c                                      ! MeanObsMJD - sigPMDec
-1500  Good1 = index(Line(IFA(140):IFB(149)),'null') .eq. 0
-      Good2 = index(Line(IFA(306):IFB(315)),'null') .eq. 0
+c      
+      GoodCh1 = index(Line(IFA(162):IFB(162)),'null') .eq. 0  ! rchi2_pm
+      GoodCh2 = index(Line(IFA(328):IFB(328)),'null') .eq. 0  ! rchi2_pm2
+1500  if (GoodCh1 .and. GoodCh2) then
+        k = 328
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! rchi2_pm2
+        k = 162
+        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! rchi2_pm
+        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
+     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
+          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+          GoodCh2 = .not.GoodCh1
+          if (GoodCh1) then
+            nBadPMCh2 = nBadPMCh2 + 1
+          else
+            nBadPMCh1 = nBadPMCh1 + 1
+          end if
+          go to 1500
+        end if
+        if (w1M+w2M+w2M2+w2M2 .gt. 0) then
+          R8tmp1 = (dfloat(w1M+w2M)*R8tmp1 + dfloat(w1M2+w2M2)*R8tmp2)
+     +           /  dfloat(w1M+w2M+w2M2+w2M2)
+          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+        end if                         ! else leave "null"
+      else if (GoodCh2) then
+        Line(IFA(162):IFB(162)) = Line(IFA(328):IFB(328))
+      end if
+
+      Good1 = GoodCh1 .and. index(Line(IFA(140):IFB(149)),'null') .eq. 0
+      Good2 = GoodCh2 .and. index(Line(IFA(306):IFB(315)),'null') .eq. 0
       if (Good1 .and. Good2) go to 1510
       nBadPM = nBadPM + 1
       If (Good2) then
@@ -1469,22 +1532,6 @@ c
       else if (Good2) then
         Line(IFA(159):IFB(161)) = Line(IFA(325):IFB(327))
       end if
-c      
-      Good1 = index(Line(IFA(162):IFB(162)),'null') .eq. 0  ! rchi2_pm
-      Good2 = index(Line(IFA(328):IFB(328)),'null') .eq. 0  ! rchi2_pm2
-      if (Good1 .and. Good2) then
-        k = 328
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! rchi2_pm2
-        k = 162
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! rchi2_pm
-        if (w1M+w2M+w2M2+w2M2 .gt. 0) then
-          R8tmp1 = (dfloat(w1M+w2M)*R8tmp1 + dfloat(w1M2+w2M2)*R8tmp2)
-     +           /  dfloat(w1M+w2M+w2M2+w2M2)
-          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
-        end if                         ! else leave "null"
-      else if (Good2) then
-        Line(IFA(162):IFB(162)) = Line(IFA(328):IFB(328))
-      end if
 c
       write(EclData(138:139),'(I2)') KodePM
 c
@@ -1495,6 +1542,8 @@ c
 c     
       if (nRow .lt. nSrc) go to 1000
 c
+      print *,'No. data rows passed through to the output file:       ',
+     +         nRow
       print *,'No. data rows with bad astrometry passed through:      ',
      +         nBadAst
       if (nBadAst .gt. 0) then
@@ -1533,6 +1582,11 @@ c
      +  print *,'No. of bad ascending AND descending rows:',
      +  nBadPM1+nBadPM2-nBadPM
       end if
+      print *,
+     + 'No. data rows with bad proper motion chi-squares:      ',
+     +         nBadPMCh1+nBadPMCh2
+      print *,'No. of bad ascending rows: ',nBadPMCh1
+      print *,'No. of bad descending rows:',nBadPMCh2
       print *,'No. data rows with mdetID mismatch:      ',
      +      NmdetIDerr
 c
@@ -1614,6 +1668,10 @@ c
       stop
 c
 3007  print *,'ERROR: bad specification for "-pb":', NumStr
+      call exit(64)
+      stop
+c
+3008  print *,'ERROR: bad specification for "-cr":', NumStr
       call exit(64)
       stop
 c      
