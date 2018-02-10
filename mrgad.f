@@ -16,6 +16,7 @@ c                       ecliptic long/lat and RA/Dec, parallax bias
 c          1.5  B80202: added photometric discrepancy columns to output
 c          1.6  B80207: bulletproofed rchi2, na, nb
 c          1.7  B80209: added outlier rejection based on chi-squares
+c          1.7  B80210: fixed bug in w1rchi2 outlier rejection
 c
 c-----------------------------------------------------------------------
 c
@@ -50,12 +51,12 @@ c
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
      +               deta, detd, detad, v11, v12, v22, v1, v2, pBias,
-     +               dwmpro, ChiSqRat
+     +               dwmpro, ChiSqRat, wrchi2a, wrchi2d
       Real*4, allocatable :: MedEclong(:), MedEcLat(:),
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.7  B80209'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.7  B80210'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -142,7 +143,7 @@ c                                      ! parallax bias
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3007) pBias
         if (dbg) print *, 'parallax bias:', pBias
-c                                      ! parallax bias
+c                                      ! max chisq ratio
       else if (Flag .eq. '-CR') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,NumStr)
@@ -619,12 +620,12 @@ c                                      ! WPRO Photometry
       GoodCh2 = index(Line(IFA(194):IFB(194)),'null') .eq. 0  ! w1rchi22
 1245  if (GoodCh1 .and. GoodCh2) then
         k = 28
-        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1rchi2
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) wrchi2a   ! w1rchi2
         k = 194
-        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1rchi22
-        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
-     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
-          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) wrchi2d   ! w1rchi22
+        if ((wrchi2a/wrchi2d .gt. ChiSqRat) .or. 
+     +      (wrchi2d/wrchi2a .gt. ChiSqRat)) then
+          GoodCh1 = (wrchi2d/wrchi2a .gt. ChiSqRat)
           GoodCh2 = .not.GoodCh1
         end if
       end if
@@ -687,10 +688,10 @@ c
       Read(Line(IFA(k):IFB(k)), *, err = 3006) w1M2     ! w1M2
       Itmp1 = w1M + w1M2
       if (Itmp1 .gt. 0) then
-        R8tmp1 = (dfloat(w1M)*R8tmp1 + dfloat(w1M2)*R8tmp2)
-     +         /  dfloat(w1M+w1M2)
+        wrchi2a = (dfloat(w1M)*wrchi2a + dfloat(w1M2)*wrchi2d)
+     +          /  dfloat(w1M+w1M2)
         k = 28
-        write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+        write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
       end if                           ! else leave "null"
       k = 99
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
@@ -705,12 +706,12 @@ c
       GoodCh2 = index(Line(IFA(197):IFB(197)),'null') .eq. 0  ! w2rchi22
       if (GoodCh1 .and. GoodCh2) then     
         k = 31
-        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2rchi2
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) wrchi2a   ! w2rchi2
         k = 197
-        Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2rchi22
-        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
-     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
-          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+        Read(Line(IFA(k):IFB(k)), *, err = 3006) wrchi2d   ! w2rchi22
+        if ((wrchi2a/wrchi2d .gt. ChiSqRat) .or. 
+     +      (wrchi2d/wrchi2a .gt. ChiSqRat)) then
+          GoodCh1 = (wrchi2d/wrchi2a .gt. ChiSqRat)
           GoodCh2 = .not.GoodCh1
         end if
       end if
@@ -771,10 +772,10 @@ c
       Read(Line(IFA(k):IFB(k)), *, err = 3006) w2M2     ! w2M2
       Itmp1 = w2M + w2M2
       if (Itmp1 .gt. 0) then
-        R8tmp1 = (dfloat(w2M)*R8tmp1 + dfloat(w2M2)*R8tmp2)
-     +         /  dfloat(Itmp1)
+        wrchi2a = (dfloat(w2M)*wrchi2a + dfloat(w2M2)*wrchi2d)
+     +          /  dfloat(Itmp1)
         k = 31
-        write (Line(IFA(k):IFB(k)),'(1pe11.3)') R8tmp1
+        write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
       end if                           ! else leave "null"
       k = 110
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
