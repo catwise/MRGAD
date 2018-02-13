@@ -17,6 +17,8 @@ c          1.5  B80202: added photometric discrepancy columns to output
 c          1.6  B80207: bulletproofed rchi2, na, nb
 c          1.7  B80209: added outlier rejection based on chi-squares
 c          1.7  B80210: fixed bug in w1rchi2 outlier rejection
+c          1.71 B80213: included the motion-solution photometry under
+c                       the rchi2_pm filter for outlier rejection
 c
 c-----------------------------------------------------------------------
 c
@@ -56,7 +58,7 @@ c
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.7  B80210'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.71 B80213'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1212,7 +1214,7 @@ c
         Line(IFA(140):IFB(149))   = Line(IFA(306):IFB(315))
       end if
       EclData(108:128) = '    null      null   '
-      go to 1550
+      go to 1512
 c
 1510  KodePM = 3      
       k = 306
@@ -1344,8 +1346,8 @@ c
       k = 149
       write(Line(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
-      Good1 = index(Line(IFA(163):IFB(163)),'null') .eq. 0  ! pmcode
-      Good2 = index(Line(IFA(329):IFB(329)),'null') .eq. 0  ! pmcodf
+1512  Good1 = GoodCh1 .and. index(Line(IFA(163):IFB(163)),'null') .eq. 0  ! pmcode
+      Good2 = GoodCh2 .and. index(Line(IFA(329):IFB(329)),'null') .eq. 0  ! pmcodf
 c  1N000
 c1234567      
       if (Good1 .and. Good2) then
@@ -1364,8 +1366,8 @@ c1234567
 1520  print *,'ERROR reading pmcode or pmcodf on source',
      +         Line(IFA(1):IFB(1))
 c     
-1530  Good1 = index(Line(IFA(164):IFB(165)),'null') .eq. 0
-      Good2 = index(Line(IFA(330):IFB(331)),'null') .eq. 0
+1530  Good1 = GoodCh1 .and. index(Line(IFA(164):IFB(165)),'null') .eq. 0
+      Good2 = GoodCh2 .and. index(Line(IFA(330):IFB(331)),'null') .eq. 0
       if (Good1 .and. Good2) then
         read (Line(IFA(164):IFB(164)), *, err = 1540) Itmp1 ! nIters_pm
         read (Line(IFA(330):IFB(330)), *, err = 1540) Itmp1 ! nIters_pn
@@ -1383,8 +1385,8 @@ c
      +'ERROR reading nIters_pm/nIters_pn/nSteps_pm/nSteps_pm on source',
      +       Line(IFA(1):IFB(1))
 c     
-1550  Good1 = index(Line(IFA(150):IFB(150)),'null') .eq. 0  ! w1snr_pm
-      Good2 = index(Line(IFA(316):IFB(316)),'null') .eq. 0  ! w1snr_pn
+1550  Good1 = GoodCh1 .and. index(Line(IFA(150):IFB(150)),'null') .eq. 0  ! w1snr_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(316):IFB(316)),'null') .eq. 0  ! w1snr_pn
       if (Good1 .and. Good2) then
         k = 316
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1snr_pn
@@ -1396,8 +1398,8 @@ c
         Line(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
       end if
 c      
-      Good1 = index(Line(IFA(151):IFB(151)),'null') .eq. 0  ! w2snr_pm
-      Good2 = index(Line(IFA(317):IFB(317)),'null') .eq. 0  ! w2snr_pn
+      Good1 = GoodCh1 .and. index(Line(IFA(151):IFB(151)),'null') .eq. 0  ! w2snr_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(317):IFB(317)),'null') .eq. 0  ! w2snr_pn
       if (Good1 .and. Good2) then
         k = 317
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2snr_pn
@@ -1409,8 +1411,8 @@ c
         Line(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
       end if
 c      
-      Good1 = index(Line(IFA(138):IFB(139)),'null') .eq. 0  ! p1-p2
-      Good2 = index(Line(IFA(304):IFB(305)),'null') .eq. 0  ! p12-p22
+      Good1 = GoodCh1 .and. index(Line(IFA(138):IFB(139)),'null') .eq. 0  ! p1-p2
+      Good2 = GoodCh2 .and. index(Line(IFA(304):IFB(305)),'null') .eq. 0  ! p12-p22
       if (Good1 .and. Good2) then
         k = 304
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! p12
@@ -1428,8 +1430,8 @@ c
         Line(IFA(138):IFB(139)) = Line(IFA(304):IFB(305))
       end if
 c      
-      Good1 = index(Line(IFA(152):IFB(153)),'null') .eq. 0  ! w1flux_pm-w1sigflux_pm
-      Good2 = index(Line(IFA(318):IFB(319)),'null') .eq. 0  ! w1flux_pm2-w1sigflux_pm2
+      Good1 = GoodCh1 .and. index(Line(IFA(152):IFB(153)),'null') .eq. 0  ! w1flux_pm-w1sigflux_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(318):IFB(319)),'null') .eq. 0  ! w1flux_pm2-w1sigflux_pm2
       if (Good1 .and. Good2) then
         k = 319
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1sigflux_pm2
@@ -1450,8 +1452,8 @@ c
         Line(IFA(152):IFB(153)) = Line(IFA(318):IFB(319))
       end if
 c      
-      Good1 = index(Line(IFA(154):IFB(155)),'null') .eq. 0  ! w2flux_pm-w2sigflux_pm
-      Good2 = index(Line(IFA(320):IFB(321)),'null') .eq. 0  ! w2flux_pm2-w2sigflux_pm2
+      Good1 = GoodCh1 .and. index(Line(IFA(154):IFB(155)),'null') .eq. 0  ! w2flux_pm-w2sigflux_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(320):IFB(321)),'null') .eq. 0  ! w2flux_pm2-w2sigflux_pm2
       if (Good1 .and. Good2) then
         k = 321
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2sigflux_pm2
@@ -1469,11 +1471,11 @@ c
         k = 155
         write (Line(IFA(k):IFB(k)), '(1pE14.4)') R8tmp1
       else if (Good2) then
-        Line(IFA(152):IFB(153)) = Line(IFA(318):IFB(319))
+        Line(IFA(154):IFB(155)) = Line(IFA(320):IFB(321))
       end if
 c      
-      Good1 = index(Line(IFA(156):IFB(158)),'null') .eq. 0  ! w1mpro_pm-w1rchi2_pm
-      Good2 = index(Line(IFA(322):IFB(324)),'null') .eq. 0  ! w1mpro_pn-w1rchi2_pn
+      Good1 = GoodCh1 .and. index(Line(IFA(156):IFB(158)),'null') .eq. 0  ! w1mpro_pm-w1rchi2_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(322):IFB(324)),'null') .eq. 0  ! w1mpro_pn-w1rchi2_pn
       if (Good1 .and. Good2) then
         k = 323
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1sigmpro_pn
@@ -1503,8 +1505,8 @@ c
         Line(IFA(156):IFB(158)) = Line(IFA(322):IFB(324))
       end if
 c      
-      Good1 = index(Line(IFA(159):IFB(161)),'null') .eq. 0  ! w2mpro_pm-w2rchi2_pm
-      Good2 = index(Line(IFA(325):IFB(327)),'null') .eq. 0  ! w2mpro_pn-w2rchi2_pn
+      Good1 = GoodCh1 .and. index(Line(IFA(159):IFB(161)),'null') .eq. 0  ! w2mpro_pm-w2rchi2_pm
+      Good2 = GoodCh2 .and. index(Line(IFA(325):IFB(327)),'null') .eq. 0  ! w2mpro_pn-w2rchi2_pn
       if (Good1 .and. Good2) then
         k = 326
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2sigmpro_pn
