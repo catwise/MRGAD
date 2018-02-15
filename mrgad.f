@@ -19,6 +19,7 @@ c          1.7  B80209: added outlier rejection based on chi-squares
 c          1.7  B80210: fixed bug in w1rchi2 outlier rejection
 c          1.71 B80213: included the motion-solution photometry under
 c                       the rchi2_pm filter for outlier rejection
+c          1.72 B80215: fixed uninitialized character in dMagData string
 c
 c-----------------------------------------------------------------------
 c
@@ -58,13 +59,14 @@ c
      +               MedRA(:), MedDec(:)
       Real*4         MedDiff(4)
 c
-      Data Vsn/'1.71 B80213'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.72 B80215'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
      +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
-     +     nBadPMCh1,nBadPMCh2/2*0/
+     +     nBadPMCh1,nBadPMCh2/2*0/,
+     +     dMagData/'                             '/
 c
       Common / VDT / CDate, CTime, Vsn
 c
