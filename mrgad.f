@@ -20,6 +20,8 @@ c          1.7  B80210: fixed bug in w1rchi2 outlier rejection
 c          1.71 B80213: included the motion-solution photometry under
 c                       the rchi2_pm filter for outlier rejection
 c          1.72 B80215: fixed uninitialized character in dMagData string
+c          1.8  B80222: added w?rchi2 & rchi2 histograms as
+c                       functions of w?mpro
 c
 c-----------------------------------------------------------------------
 c
@@ -29,6 +31,7 @@ c
       Character*5000 Line
       Character*500  InFNam, OutFNam, InFNamA, InFNamD
       Character*141  EclData
+      Character*145  ChiSqData
       Character*29   dMagData
       Character*25   Field(MaxFld), NumStr
       Character*11   Vsn, Fmt, IFmt
@@ -41,7 +44,12 @@ c
      +               nBadAst, nBadW1Phot, KodeAst, KodePhot1, KodePhot2,
      +               KodePM, nBadPM1, nBadPM2, nBadPM, Itmp1, Itmp2,
      +               nBadW2Phot, nBadW2Phot1, nBadW2Phot2, NmdetIDerr,
-     +               w1M, w1M2, w2M, w2M2, nBadPMCh1, nBadPMCh2
+     +               w1M, w1M2, w2M, w2M2, nBadPMCh1, nBadPMCh2,
+     +               Nw1rchi2asce(20), Nw1rchi2desc(20),
+     +               Nw1rchi2mrg(20),  Nw2rchi2asce(20),
+     +               Nw2rchi2desc(20), Nw2rchi2mrg(20),
+     +               Nrchi2asce(20),   Nrchi2desc(20),
+     +               Nrchi2mrg(20), nMedDiff
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
      +               GoodCh1, GoodCh2 
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
@@ -54,19 +62,25 @@ c
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
      +               deta, detd, detad, v11, v12, v22, v1, v2, pBias,
-     +               dwmpro, ChiSqRat, wrchi2a, wrchi2d
-      Real*4, allocatable :: MedEclong(:), MedEcLat(:),
-     +               MedRA(:), MedDec(:)
-      Real*4         MedDiff(4)
+     +               dwmpro, ChiSqRat, wrchi2a, wrchi2d, wmpro,
+     +               rchi2a, rchi2d, rchi2
+      Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
+     +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
+     +               w1rchi2desc(:,:), w2rchi2desc(:,:),
+     +               w1rchi2mrg(:,:), w2rchi2mrg(:,:), rchi2asce(:,:),
+     +               rchi2desc(:,:), rchi2mrg(:,:)
+      Real*4         MedDiff(4), MedRchi2(9,20)
 c
-      Data Vsn/'1.72 B80215'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.8  B80222'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
      +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
-     +     nBadPMCh1,nBadPMCh2/2*0/,
-     +     dMagData/'                             '/
+     +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/,
+     +     dMagData/'                             '/, Nw1rchi2asce,
+     +     Nw1rchi2desc,Nw1rchi2mrg,Nw2rchi2asce, Nw2rchi2desc,
+     +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -218,7 +232,72 @@ c                                      ! Allocate arrays for median diffs
         print *,'       no. elements =',nSrc
         call exit(64)
       end if
-c      
+c                                      ! Allocate arrays for chi-squares
+      allocate(w1rchi2asce(nSrc,20))
+      if (.not.allocated(w1rchi2asce)) then
+        print *,'ERROR: allocation of w1rchi2asce failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(w1rchi2desc(nSrc,20))
+      if (.not.allocated(w1rchi2desc)) then
+        print *,'ERROR: allocation of w1rchi2desc failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(w1rchi2mrg(nSrc,20))
+      if (.not.allocated(w1rchi2mrg)) then
+        print *,'ERROR: allocation of w1rchi2mrg failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(w2rchi2asce(nSrc,20))
+      if (.not.allocated(w2rchi2asce)) then
+        print *,'ERROR: allocation of w2rchi2asce failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(w2rchi2desc(nSrc,20))
+      if (.not.allocated(w1rchi2desc)) then
+        print *,'ERROR: allocation of w2rchi2desc failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(w2rchi2mrg(nSrc,20))
+      if (.not.allocated(w2rchi2mrg)) then
+        print *,'ERROR: allocation of w2rchi2mrg failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(rchi2asce(nSrc,20))
+      if (.not.allocated(rchi2asce)) then
+        print *,'ERROR: allocation of rchi2asce failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(rchi2desc(nSrc,20))
+      if (.not.allocated(rchi2desc)) then
+        print *,'ERROR: allocation of rchi2desc failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(rchi2mrg(nSrc,20))
+      if (.not.allocated(rchi2mrg)) then
+        print *,'ERROR: allocation of rchi2mrg failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+c                                      ! Read and process table files
       open (12, file = InFNamA)
       open (14, file = InFNamD)
       open (20, file = OutFNam)
@@ -294,16 +373,16 @@ c                                      ! Check astrometric parameters
       GoodCh2 = index(Line(IFA(198):IFB(198)),'null') .eq. 0
       if (GoodCh1 .and. GoodCh2) then
         k = 198
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2 ! rchi22
+        read (Line(IFA(k):IFB(k)), *, err = 3006) rchi2d ! rchi22
         k = 32
-        read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1 ! rchi2
-        if ((R8tmp1/R8tmp2 .gt. ChiSqRat) .or. 
-     +      (R8tmp2/R8tmp1 .gt. ChiSqRat)) then
-          GoodCh1 = (R8tmp2/R8tmp1 .gt. ChiSqRat)
+        read (Line(IFA(k):IFB(k)), *, err = 3006) rchi2a ! rchi2
+        if ((rchi2a/rchi2d .gt. ChiSqRat) .or. 
+     +      (rchi2d/rchi2a .gt. ChiSqRat)) then
+          GoodCh1 = (rchi2d/rchi2a .gt. ChiSqRat)
           GoodCh2 = .not.GoodCh1
         else
-          R8tmp1 = (R8tmp1+R8tmp2)/2.0d0         ! assume equal Ndf
-          write(Line(IFA(k):IFB(k)),'(1pE11.3)') R8tmp1
+          rchi2 = (rchi2a+rchi2d)/2.0d0         ! assume equal Ndf
+          write(Line(IFA(k):IFB(k)),'(1pE11.3)') rchi2
         end if
       else if (GoodCh2) then
         Line(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
@@ -413,9 +492,10 @@ c                                      ! Get ecliptic position offsets
       if (dEcLong .gt.  180.0d0) dEcLong = dEcLong - 360.0d0
       if (dEcLong .lt. -180.0d0) dEcLong = dEcLong + 360.0d0
       dEcLong = 3600.0d0*dEcLong*dcos(d2r*EcLat) - pBias
-      MedEcLong(nRow) = dEcLong
+      nMedDiff = nMedDiff + 1
+      MedEcLong(nMedDiff) = dEcLong
       dEcLat = 3600.0d0*(EcLat2 - EcLat)
-      MedEcLat(nRow) = dEcLat
+      MedEcLat(nMedDiff) = dEcLat
       dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)
       dEcLatSig  = dsqrt(EcLatSig**2  + EcLatSig2**2)
       dEcLongSNR = dabs(dEcLong)/dEcLongSig
@@ -433,8 +513,8 @@ c
       R8tmp1 = ra2 - ra
       if (R8tmp1 .gt.  180.0d0) R8tmp1 = R8tmp1 - 360.0d0
       if (R8tmp1 .lt. -180.0d0) R8tmp1 = R8tmp1 + 360.0d0
-      MedRA(nRow) = 3600.0d0*R8tmp1*dcos(d2r*dec)
-      MedDec(nRow) = 3600.0d0*(dec2 - dec)    
+      MedRA(nMedDiff) = 3600.0d0*R8tmp1*dcos(d2r*dec)
+      MedDec(nMedDiff) = 3600.0d0*(dec2 - dec)    
 c                                      ! Get averaged RA & Dec
       oma11 = sigra**2                 ! A & D error covariance matrices
       oma12 = sigradec*dabs(sigradec)
@@ -679,12 +759,32 @@ c
       k = 26
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1mpro
       dwmpro = R8tmp1 - R8tmp2
-      R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-      write (Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+      wmpro = (v2*R8tmp1+v1*R8tmp2)/(v1+v2) ! refined w1mpro
+      write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
+      k = R8tmp1 + 1
+      if (k .lt.  1) k = 1
+      if (k .gt. 20) k = 20
+      Nw1rchi2asce(k) = Nw1rchi2asce(k) + 1
+      w1rchi2asce(Nw1rchi2asce(k),k) = wrchi2a
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 27
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
       write (dMagData(1:14),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
+c
+      k = wmpro + 1
+      if (k .lt.  1) k = 1
+      if (k .gt. 20) k = 20
+      Nrchi2mrg(k) = Nrchi2mrg(k) + 1
+      rchi2mrg(Nrchi2mrg(k),k) = rchi2
+      Nrchi2asce(k) = Nrchi2asce(k) + 1
+      rchi2asce(Nrchi2asce(k),k) = rchi2a
+      k = R8tmp2 + 1
+      if (k .lt.  1) k = 1
+      if (k .gt. 20) k = 20
+      Nw1rchi2desc(k) = Nw1rchi2desc(k) + 1
+      w1rchi2desc(Nw1rchi2desc(k),k) = wrchi2d
+      Nrchi2desc(k) = Nrchi2desc(k) + 1
+      rchi2desc(Nrchi2desc(k),k) = rchi2d
 c      
       k = 99
       Read(Line(IFA(k):IFB(k)), *, err = 3006) w1M      ! w1M
@@ -696,6 +796,11 @@ c
      +          /  dfloat(w1M+w1M2)
         k = 28
         write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
+        k = wmpro + 1
+        if (k .lt.  1) k = 1
+        if (k .gt. 20) k = 20
+        Nw1rchi2mrg(k) = Nw1rchi2mrg(k) + 1
+        w1rchi2mrg(Nw1rchi2mrg(k),k) = wrchi2a
       end if                           ! else leave "null"
       k = 99
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
@@ -763,9 +868,22 @@ c
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2mprp
       k = 29
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2mpro
+c
+      k = R8tmp1 + 1
+      if (k .lt.  1) k = 1
+      if (k .gt. 20) k = 20
+      Nw2rchi2asce(k) = Nw2rchi2asce(k) + 1
+      w2rchi2asce(Nw2rchi2asce(k),k) = wrchi2a
+      k = R8tmp2 + 1
+      if (k .lt.  1) k = 1
+      if (k .gt. 20) k = 20
+      Nw2rchi2desc(k) = Nw2rchi2desc(k) + 1
+      w2rchi2desc(Nw2rchi2desc(k),k) = wrchi2d
+c      
       dwmpro = R8tmp1 - R8tmp2
-      R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-      write (Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+      wmpro = (v2*R8tmp1+v1*R8tmp2)/(v1+v2) ! refined w2mpro
+      k = 29
+      write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 30
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
@@ -780,6 +898,11 @@ c
      +          /  dfloat(Itmp1)
         k = 31
         write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
+        k = wmpro + 1
+        if (k .lt.  1) k = 1
+        if (k .gt. 20) k = 20
+        Nw2rchi2mrg(k) = Nw2rchi2mrg(k) + 1
+        w2rchi2mrg(Nw2rchi2mrg(k),k) = wrchi2a
       end if                           ! else leave "null"
       k = 110
       write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
@@ -1593,14 +1716,14 @@ c
       print *,'No. of bad ascending rows: ',nBadPMCh1
       print *,'No. of bad descending rows:',nBadPMCh2
       print *,'No. data rows with mdetID mismatch:      ',
-     +      NmdetIDerr
+     +         NmdetIDerr
 c
-      call TJsort(nSrc, MedEcLong)      
-      call TJsort(nSrc, MedEcLat)      
-      call TJsort(nSrc, MedRA)      
-      call TJsort(nSrc, MedDec)
-      k = nSrc/2
-      if (mod(nSrc,2) .eq. 1) then
+      call TJsort(nMedDiff, MedEcLong)      
+      call TJsort(nMedDiff, MedEcLat)      
+      call TJsort(nMedDiff, MedRA)      
+      call TJsort(nMedDiff, MedDec)
+      k = nMedDiff/2
+      if (mod(nMedDiff,2) .eq. 1) then
         MedDiff(1) = MedEcLong(k+1) 
         MedDiff(2) = MedEcLat(k+1) 
         MedDiff(3) = MedRA(k+1) 
@@ -1622,10 +1745,78 @@ c
       write(6,'('' Ecliptic Latitude: '',F10.5)') MedDiff(2)
       write(6,'('' Right Ascension:   '',F10.5)') MedDiff(3)
       write(6,'('' Declination:       '',F10.5)') MedDiff(4)
+      write(6,'('' No. of samples:    '',I10)') nMedDiff
       print *
       if (dbg) print *,'corresponding radial offsets:',
      + sqrt(MedDiff(1)**2+MedDiff(2)**2),
      + sqrt(MedDiff(3)**2+MedDiff(4)**2)
+c
+c-----------------------------------------------------------------------     
+c                                      ! Process chi-square histograms
+      do 2000 k = 1, 20
+        call TJsort(Nw1rchi2asce(k), w1rchi2asce(1,k)) 
+        call TJsort(Nw1rchi2desc(k), w1rchi2desc(1,k)) 
+        call TJsort(Nw1rchi2mrg(k),   w1rchi2mrg(1,k)) 
+        call TJsort(Nw2rchi2asce(k), w2rchi2asce(1,k)) 
+        call TJsort(Nw2rchi2desc(k), w2rchi2desc(1,k)) 
+        call TJsort(Nw2rchi2mrg(k),   w2rchi2mrg(1,k)) 
+        call TJsort(Nrchi2asce(k),     rchi2asce(1,k)) 
+        call TJsort(Nrchi2desc(k),     rchi2desc(1,k)) 
+        call TJsort(Nrchi2mrg(k),       rchi2mrg(1,k)) 
+        call GetMed(Nw1rchi2asce(k), w1rchi2asce(1,k), MedRchi2(1,k))
+        call GetMed(Nw1rchi2desc(k), w1rchi2desc(1,k), MedRchi2(2,k)) 
+        call GetMed(Nw1rchi2mrg(k),   w1rchi2mrg(1,k), MedRchi2(3,k)) 
+        call GetMed(Nw2rchi2asce(k), w2rchi2asce(1,k), MedRchi2(4,k)) 
+        call GetMed(Nw2rchi2desc(k), w2rchi2desc(1,k), MedRchi2(5,k)) 
+        call GetMed(Nw2rchi2mrg(k),   w2rchi2mrg(1,k), MedRchi2(6,k)) 
+        call GetMed(Nrchi2asce(k),     rchi2asce(1,k), MedRchi2(7,k)) 
+        call GetMed(Nrchi2desc(k),     rchi2desc(1,k), MedRchi2(8,k)) 
+        call GetMed(Nrchi2mrg(k),       rchi2mrg(1,k), MedRchi2(9,k)) 
+2000  continue        
+c
+      open (24, file = 'hists-'//OutFNam)
+      write (24,'(a)') '|bin|wmpro|w1rchi2a| nw1a|w1rchi2d| nw1d|'
+     + //'w1rchi2m| nw1m|w2rchi2a| nw2a|w2rchi2d| nw2d|w2rchi2m| nw2m|'
+     + //' rchi2a |nasce| rchi2d |ndesc| rchi2m | nmrg|'
+      write (24,'(a)') '| i | real|  real  |  i  |  real  |  i  |'
+     + //'  real  |  i  |  real  |  i  |  real  |  i  |  real  |  i  |'
+     + //'  real  |  i  |  real  |  i  |  real  |  i  |'
+      write (24,'(a)') '| - | mag |    -   |  -  |    -   |  -  |'
+     + //'    -   |  -  |    -   |  -  |    -   |  -  |    -   |  -  |'
+     + //'    -   |  -  |    -   |  -  |    -   |  -  |'
+      write (24,'(a)') '| n |  n  |  null  |  n  |  null  |  n  |'
+     + //'  null  |  n  |  null  |  n  |  null  |  n  |  null  |  n  |'
+     + //'  null  |  n  |  null  |  n  |  null  |  n  |'
+c
+      do 2100 k = 1, 20
+        if (Nw1rchi2asce(k)+Nw1rchi2desc(k)+Nw1rchi2mrg(k)
+     +     +Nw2rchi2asce(k)+Nw2rchi2desc(k)+Nw2rchi2mrg(k)
+     +     +Nrchi2asce(k)  +Nrchi2desc(k)  +Nrchi2mrg(k)  .eq. 0)
+     +      go to 2100
+        ChiSqData = '             null       0   null       0 '
+     +  //'  null       0   null       0   null       0   null       0 '
+     +  //'  null       0   null       0   null       0'
+        write (ChiSqData(1:10),'(i4,f6.1)') k, float(k)
+        if (Nw1rchi2asce(k) .gt. 0) write(ChiSqData(11:25), '(f9.4,i6)')
+     +  MedRchi2(1,k), Nw1rchi2asce(k)
+        if (Nw1rchi2desc(k) .gt. 0) write(ChiSqData(26:40), '(f9.4,i6)')
+     +  MedRchi2(2,k), Nw1rchi2desc(k)
+        if (Nw1rchi2mrg(k) .gt. 0)  write(ChiSqData(41:55), '(f9.4,i6)')
+     +  MedRchi2(3,k), Nw1rchi2mrg(k)
+        if (Nw2rchi2asce(k) .gt. 0) write(ChiSqData(56:70), '(f9.4,i6)')
+     +  MedRchi2(4,k), Nw2rchi2asce(k)
+        if (Nw2rchi2desc(k) .gt. 0) write(ChiSqData(71:85), '(f9.4,i6)')
+     +  MedRchi2(5,k), Nw2rchi2desc(k)
+        if (Nw2rchi2mrg(k) .gt. 0)  write(ChiSqData(86:100),'(f9.4,i6)')
+     +  MedRchi2(6,k), Nw2rchi2mrg(k)
+        if (Nrchi2asce(k) .gt. 0)  write(ChiSqData(101:115),'(f9.4,i6)')
+     +  MedRchi2(7,k), Nrchi2asce(k)
+        if (Nrchi2desc(k) .gt. 0)  write(ChiSqData(116:130),'(f9.4,i6)')
+     +  MedRchi2(8,k), Nrchi2desc(k)
+        if (Nrchi2mrg(k) .gt. 0)   write(ChiSqData(131:145),'(f9.4,i6)')
+     +  MedRchi2(9,k), Nrchi2mrg(k)
+        write(24,'(a)') ChiSqData
+2100  continue
 c
       call signoff('mrgad')
       stop
@@ -1945,3 +2136,21 @@ c
         RA(I)=RRA
       GO TO 10
       END
+c
+C=======================================================================
+c                                  Get median real*4 array
+      subroutine GetMed(N, array, med)
+c
+      integer*4 N, k
+      real*4    array(N), med
+c
+      k = N/2
+      if (mod(N,2) .eq. 1) then
+        med = array(k+1) 
+      else
+        med = (array(k)+array(k+1) )/2.0
+      end if
+c
+      return
+      end
+      
