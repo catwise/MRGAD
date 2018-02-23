@@ -29,7 +29,7 @@ c
                      Parameter (MaxFld = 1000)
 c
       Character*5000 Line
-      Character*500  InFNam, OutFNam, InFNamA, InFNamD
+      Character*500  InFNam, OutFNam, InFNamA, InFNamD, HistNam
       Character*141  EclData
       Character*145  ChiSqData
       Character*29   dMagData
@@ -38,6 +38,7 @@ c
       Character*8    CDate, CTime
       Character*7    ChTmp1, ChTmp2
       Character*3    Flag, Flag0
+      Character*1    SlashChar
       Integer*4      IArgC, LNBlnk, NArgs, NArg, nSrc, Access, nEpA,
      +               nEpD, IFa(MaxFld), IFb(MaxFld), NF, k, k1, k2, n,
      +               nRow, nBadAst1, nBadAst2, nBadW1Phot1, nBadW1Phot2,
@@ -77,7 +78,7 @@ c
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
      +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
-     +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/,
+     +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/, SlashChar/'/'/,
      +     dMagData/'                             '/, Nw1rchi2asce,
      +     Nw1rchi2desc,Nw1rchi2mrg,Nw2rchi2asce, Nw2rchi2desc,
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/
@@ -100,8 +101,9 @@ c
         print *
         print *,'The OPTIONAL flags are:'
         print *,'    -cr maximum chi-square ratio for averaging (3.0)'
-        print *,'    -d  turn on debug prints'
         print *,'    -pb parallax bias (0)'
+        print *,'    -w  testing on Windows machine'
+        print *,'    -d  turn on debug prints'
         call exit(32)
       end if
 c
@@ -128,6 +130,10 @@ c                                      ! Turn debug prints on
       else if (Flag .eq. '-D') then
         dbg = .true.
         print *,'Debug prints enabled'
+c                                      ! Testing on Windows machine
+      else if (Flag .eq. '-W') then
+        SlashChar = '\'
+        if (dbg) print *,'SlashChar = "\"'
 c                                      ! input ascending stf file
       else if (Flag .eq. '-IA') then
         call NextNarg(NArg,Nargs)
@@ -1669,6 +1675,7 @@ c
       write (20,'(a)') Line(1:1555)//dMagData//EclData
 c     
       if (nRow .lt. nSrc) go to 1000
+      close (20)
 c
       print *,'No. data rows passed through to the output file:       ',
      +         nRow
@@ -1774,7 +1781,18 @@ c                                      ! Process chi-square histograms
         call GetMed(Nrchi2mrg(k),       rchi2mrg(1,k), MedRchi2(9,k)) 
 2000  continue        
 c
-      open (24, file = 'hists-'//OutFNam)
+      if (index(OutFNam,SlashChar) .gt. 0) then
+        k = 0
+        do 2010 n = 1, lnblnk(OutFNam)
+          if (OutFNam(n:n) .eq. SlashChar) k = n
+2010    continue
+        HistNam = OutFNam(1:k)//'hists-'//OutFNam(k+1:lnblnk(OutFNam))
+        if (dbg) print *,'HistNam = ', HistNam(1:lnblnk(HistNam))
+      else
+        HistNam = 'hists-'//OutFNam
+      end if
+c
+      open (24, file = HistNam)
       write (24,'(a)') '|bin|wmpro|w1rchi2a| nw1a|w1rchi2d| nw1d|'
      + //'w1rchi2m| nw1m|w2rchi2a| nw2a|w2rchi2d| nw2d|w2rchi2m| nw2m|'
      + //' rchi2a |nasce| rchi2d |ndesc| rchi2m | nmrg|'
