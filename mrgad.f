@@ -29,6 +29,7 @@ c                       PM-based estimate of parallax dEcLong_pm
 c          1.82 B80302: added Tom's median dwmag? & histograms; added
 c                       error covariance matrix rotation for ecliptic
 c                       uncertainties; added dEcLong_pm &c.
+c          1.83 B80307: added avg & sigma over MeanObsMJD
 c
 c-----------------------------------------------------------------------
 c
@@ -59,7 +60,7 @@ c
      +               Nw2rchi2desc(20), Nw2rchi2mrg(20),
      +               Nrchi2asce(20),   Nrchi2desc(20),
      +               Nrchi2mrg(20), nMedDiff, nTJw1, nTJw2,
-     +               TJdw1Hist(51), TJdw2Hist(51)
+     +               TJdw1Hist(51), TJdw2Hist(51), nMJD
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
      +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
@@ -75,7 +76,8 @@ c
      +               dwmpro, ChiSqRat, wrchi2a, wrchi2d, wmpro,
      +               rchi2a, rchi2d, rchi2, TJw1Sum, TJw1SumSq,
      +               TJw2Sum, TJw2SumSq, TJw1SumSigA, TJw2SumSigA,
-     +               TJw1SumSigD, TJw2SumSigD, dw1ChSqSum, dw2ChSqsum
+     +               TJw1SumSigD, TJw2SumSigD, dw1ChSqSum, dw2ChSqsum,
+     +               sumMJD, sumMJDsq
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -83,7 +85,7 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2
 c
-      Data Vsn/'1.82 B80302'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.83 B80307'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -96,7 +98,8 @@ c
      +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.05/,
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
      +     dw1ChSqSum,dw2ChSqsum/2*0.0d0/, nTJw1, nTJw2/2*0/,
-     +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/
+     +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
+     +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -1416,6 +1419,9 @@ c
       k = 140
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! MeanObsMJD
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
+      sumMJD   = sumMJD   + R8tmp1
+      sumMJDsq = sumMJDsq + R8tmp1**2
+      nMJD     = nMJD + 1
       write (Line(IFA(k):IFB(k)),'(F13.6)') R8tmp1
 c                                      ! NOTE: using stationary-solution position
 c                                      !       variables for motion-solution 
@@ -1802,6 +1808,14 @@ c
       print *,'No. of bad descending rows:',nBadPMCh2
       print *,'No. data rows with mdetID mismatch:      ',
      +         NmdetIDerr
+      if (nMJD .gt. 0) then
+       R8tmp1 = sumMJD/dfloat(nMJD)
+       R8tmp2 = dsqrt(dabs(sumMJDsq/dfloat(nMJD)) - R8tmp1**2)
+       print *
+       write(6,
+     + '('' Motion Solution Epoch Mean & Sigma:'',2f10.2,''; N ='',I6)')
+     +      R8tmp1, R8tmp2, nMJD
+      end if
 c                                      TJ Statistics
       if (nTJw1 .gt. 1) then
         print *
