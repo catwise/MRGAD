@@ -30,6 +30,7 @@ c          1.82 B80302: added Tom's median dwmag? & histograms; added
 c                       error covariance matrix rotation for ecliptic
 c                       uncertainties; added dEcLong_pm &c.
 c          1.83 B80307: added avg & sigma over MeanObsMJD
+c          1.84 B80314: fixed field overflow for dwmpro rchi2's
 c
 c-----------------------------------------------------------------------
 c
@@ -77,7 +78,7 @@ c
      +               rchi2a, rchi2d, rchi2, TJw1Sum, TJw1SumSq,
      +               TJw2Sum, TJw2SumSq, TJw1SumSigA, TJw2SumSigA,
      +               TJw1SumSigD, TJw2SumSigD, dw1ChSqSum, dw2ChSqsum,
-     +               sumMJD, sumMJDsq
+     +               sumMJD, sumMJDsq, rchi2dwm
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -85,14 +86,14 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2
 c
-      Data Vsn/'1.83 B80307'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.84 B80314'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
      +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
      +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/, SlashChar/'/'/,
-     +     dMagData/'                             '/, Nw1rchi2asce,
+     +     dMagData/'  null   null   null   null  '/, Nw1rchi2asce,
      +     Nw1rchi2desc,Nw1rchi2mrg,Nw2rchi2asce, Nw2rchi2desc,
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/,
      +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.05/,
@@ -814,7 +815,9 @@ c
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 27
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
-      write (dMagData(1:14),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
+      rchi2dwm = dwmpro**2/(v1+v2)
+      if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
+      write (dMagData(1:14),'(2F7.3)') dwmpro, rchi2dwm
 c                                      ! TJ Statistics
       if (doTJw1) then
         nTJw1        = nTJw1 + 1
@@ -944,7 +947,9 @@ c
       R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 30
       write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
-      write (dMagData(15:28),'(2F7.3)') dwmpro, dwmpro**2/(v1+v2)
+      rchi2dwm = dwmpro**2/(v1+v2)
+      if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
+      write (dMagData(15:28),'(2F7.3)') dwmpro, rchi2dwm
 c                                      ! TJ Statistics
       if (doTJw2) then
         nTJw2        = nTJw2 + 1
