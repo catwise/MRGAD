@@ -31,6 +31,11 @@ c                       error covariance matrix rotation for ecliptic
 c                       uncertainties; added dEcLong_pm &c.
 c          1.83 B80307: added avg & sigma over MeanObsMJD
 c          1.84 B80314: fixed field overflow for dwmpro rchi2's
+c          1.85 B80320: set pBias default to 0.1; added mean & sigma 
+c                       Asce-Desc w?mJDmean difference and used to 
+c                       propagate Asce RA/Dec to Desc for sole purpose
+c                       of stationary-based parallax estimate; added
+c                       latter to mdex table
 c
 c-----------------------------------------------------------------------
 c
@@ -41,9 +46,9 @@ c
       Character*500  InFNam, OutFNam, InFNamA, InFNamD, HistNam, TJnam
       Character*141  EclData
       Character*145  ChiSqData
+      Character*44   ParData
       Character*29   dMagData
       Character*25   Field(MaxFld), NumStr
-      Character*22   ParData
       Character*11   Vsn, Fmt, IFmt
       Character*8    CDate, CTime
       Character*7    ChTmp1, ChTmp2
@@ -61,7 +66,7 @@ c
      +               Nw2rchi2desc(20), Nw2rchi2mrg(20),
      +               Nrchi2asce(20),   Nrchi2desc(20),
      +               Nrchi2mrg(20), nMedDiff, nTJw1, nTJw2,
-     +               TJdw1Hist(51), TJdw2Hist(51), nMJD
+     +               TJdw1Hist(51), TJdw2Hist(51), nMJD, ndwMJD
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
      +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
@@ -69,7 +74,7 @@ c
      +               EcLong, EcLat, EcLong2, EcLat2, EcLongSig,
      +               EcLongSig2, EcLatSig, EcLatSig2, R8tmp1, R8tmp2,
      +               d2r, AngDiff, dEcLong, dEcLat, dEcLongSig,
-     +               dEcLatSig, dEcLongSNR, dEcLatSNR,
+     +               dEcLatSig, dEcLongSNR, dEcLatSNR, dRA, dDec,
      +               chi2pmra, chi2pmdec, wad11, wad12, wad22,
      +               oma11, oma12, oma22, omd11, omd12, omd22,
      +               wa11,  wa12,  wa22,  wd11,  wd12,  wd22,
@@ -78,7 +83,10 @@ c
      +               rchi2a, rchi2d, rchi2, TJw1Sum, TJw1SumSq,
      +               TJw2Sum, TJw2SumSq, TJw1SumSigA, TJw2SumSigA,
      +               TJw1SumSigD, TJw2SumSigD, dw1ChSqSum, dw2ChSqsum,
-     +               sumMJD, sumMJDsq, rchi2dwm
+     +               sumMJD, sumMJDsq, rchi2dwm, rastat, decstat, 
+     +               sigrastat, sigdecstat, sigradecstat, dw1MJD,
+     +               dw2MJD, sumdw1MJD, sumdw2MJD, sum2dw1MJD,
+     +               sum2dw2MJD, PMRA, sigPMRA, PMDec, sigPMDec
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -86,11 +94,11 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2
 c
-      Data Vsn/'1.84 B80314'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.85 B80320'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
-     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.0d0/,
+     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.1d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
      +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/, SlashChar/'/'/,
      +     dMagData/'  null   null   null   null  '/, Nw1rchi2asce,
@@ -100,7 +108,9 @@ c
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
      +     dw1ChSqSum,dw2ChSqsum/2*0.0d0/, nTJw1, nTJw2/2*0/,
      +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
-     +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/
+     +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/, ndwMJD/0/,
+     +     sumdw1MJD,sumdw2MJD,sum2dw1MJD,sum2dw2MJD/4*0.0d0/,
+     +     rastat,decstat/2*0.0d0/
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -120,7 +130,7 @@ c
         print *
         print *,'The OPTIONAL flags are:'
         print *,'    -cr maximum chi-square ratio for averaging (3.0)'
-        print *,'    -pb parallax bias (asec; 0)'
+        print *,'    -pb parallax bias (asec; 0.1)'
         print *,'    -t1 lower S/N limit for TJ statistics (19.5)'
         print *,'    -t2 upper S/N limit for TJ statistics (20.5)'
         print *,'    -tf trim fraction for TJ statistics (0.05)'
@@ -406,28 +416,28 @@ c                                          ! verify fields in gsa file
       call ChkFld(Field(173),'sigraded',173)
 c                                      ! append to input header lines
       write (20, '(a)') Line(1:1556)//'dw1mag|rch2w1|dw2mag|rch2w2|'
-     +       //'  EcLong  | EcLongSig|  EcLat   | EcLatSig|'
-     +       //'  dEcLong |dEcLongSig|  dEcLat  |dEcLatSig|'
-     +       //'dEcLongSNR| dEcLatSNR| chi2pmra|chi2pmdec|'
-     +       //'ka|k1|k2|km|m|dEcLong_pm|dEcLSig_pm|'
+     +       //'   elon   |  elonSig |   elat   | elatSig |'
+     +       //'   Delon  | DelonSig |   Delat  | DelatSig|'
+     +       //' DelonSNR | DelatSNR | chi2pmra|chi2pmdec|ka|k1|k2|'
+     +       //'km|m|  par_pm  | par_pmSig| par_stat | par_sigma|'
       read (10, '(a)', end=3000) Line
       write (20, '(a)') Line(1:1556)//'   r  |   r  |   r  |   r  |'
      +       //'    r     |     r    |     r    |    r    |'
      +       //'    r     |     r    |     r    |    r    |'
-     +       //'    r     |     r    |    r    |     r   |'
-     +       //' i| i| i| i|c|    r     |     r    |'
+     +       //'    r     |     r    |    r    |     r   | i| i| i|'
+     +       //' i|c|    r     |     r    |    r     |     r    |'
       read (10, '(a)', end=3000) Line
       write (20, '(a)') Line(1:1556)//'  mag |   -  |  mag |   -  |'
      +       //'   deg    |   asec   |    deg   |   asec  |'
      +       //'   asec   |   asec   |   asec   |   asec  |'
-     +       //'     -    |     -    |    -    |    -    |'
-     +       //' -| -| -| -|-|   asec   |   asec   |'
+     +       //'     -    |     -    |    -    |    -    | -| -| -|'
+     +       //' -|-|   asec   |   asec   |   asec   |   asec   |'
       read (10, '(a)', end=3000) Line
       write (20, '(a)') Line(1:1556)//' null | null | null | null |'
      +       //'   null   |   null   |   null   |   null  |'
      +       //'   null   |   null   |   null   |   null  |'
-     +       //'   null   |   null   |   null  |   null  |'
-     +       //' n| n| n| n|x|   null   |   null   |'
+     +       //'   null   |   null   |   null  |   null  | n| n| n|'
+     +       //' n|x|   null   |   null   |   null   |   null   |'
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Process each data line
@@ -435,7 +445,7 @@ c                                      ! Process each data line
       doTJw1 = .false.
       doTJw2 = .false.
       read (10, '(a)', end=3005) Line
-      ParData = '    null       null   '
+      ParData = '    null       null       null       null   '
 c                                      ! Check astrometric parameters
       GoodCh1 = index(Line(IFA(32):IFB(32)),  'null') .eq. 0
       GoodCh2 = index(Line(IFA(198):IFB(198)),'null') .eq. 0
@@ -519,7 +529,13 @@ c                                      ! Check for zero-point straddle
         else
           ra2 = ra2 - 360.0d0        
         end if
-      end if      
+      end if
+c                                      ! save for later parallax estimate
+      rastat       = ra
+      decstat      = dec
+      sigrastat    = sigra
+      sigdecstat   = sigdec
+      sigradecstat = sigradec
 c                                      ! Get Ecliptic positions
       call Cel2Ec(ra,  dec,  EcLong,  EcLat)
       call Cel2Ec(ra2, dec2, EcLong2, EcLat2)
@@ -1282,9 +1298,15 @@ c
         Line(IFA(120):IFB(121)) = Line(IFA(286):IFB(287))
       end if
 c
+      dw1MJD = -9.9d9
       Good1 = index(Line(IFA(106):IFB(108)),'null') .eq. 0 ! w1mJDmin-w1mJDmean
       Good2 = index(Line(IFA(272):IFB(274)),'null') .eq. 0 ! w1mJDmin2-w1mJDmean2
       if (Good1 .and. Good2) then
+        k = 274
+        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmean2
+        k = 108
+        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmean
+        dw1MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
         k = 272
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmin2
         k = 106
@@ -1312,9 +1334,15 @@ c
         Line(IFA(106):IFB(108)) = Line(IFA(272):IFB(274))
       end if
 c
+      dw2MJD = -9.9d9
       Good1 = index(Line(IFA(117):IFB(119)),'null') .eq. 0 ! w2mJDmin-w2mJDmean
       Good2 = index(Line(IFA(283):IFB(285)),'null') .eq. 0 ! w2mJDmin2-w2mJDmean2
       if (Good1 .and. Good2) then
+        k = 285
+        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmean2
+        k = 119
+        read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmean
+        dw2MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
         k = 283
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmin2
         k = 117
@@ -1463,9 +1491,9 @@ c
       dEcLong = EcLong2 - EcLong       ! use Desc-Asce for parallax
       if (dEcLong .gt.  180.0d0) dEcLong = dEcLong - 360.0d0
       if (dEcLong .lt. -180.0d0) dEcLong = dEcLong + 360.0d0
-      dEcLong = 3600.0d0*dEcLong*dcos(d2r*EcLat) - pBias
-      dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)
-      write(ParData,'(2f11.3)') dEcLong, dEcLongSig     
+      dEcLong = (3600.0d0*dEcLong*dcos(d2r*EcLat) - pBias)/2.0d0
+      dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)/2.0d0
+      write(ParData(1:22),'(2f11.3)') dEcLong, dEcLongSig     
 c                                      ! Check for zero-point straddle
       if (dabs(ra-ra2) .gt. 180.0d0) then
         if (ra .gt. ra2) then
@@ -1538,8 +1566,8 @@ c
       v2 = sigra2**2
       R8tmp1 = (ra - ra2)**2/(v1 + v2)  ! chi2pmra
       write(EclData(108:117),'(1pE10.3)') R8tmp1
-      R8tmp1 = (v2*ra+v1*ra2)/(v1+v2)
-      R8tmp2 = dsqrt(v1*v2/(v1+v2))
+      R8tmp1  = (v2*ra+v1*ra2)/(v1+v2)
+      R8tmp2  = dsqrt(v1*v2/(v1+v2))
       k = 146
       if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
      + then
@@ -1759,9 +1787,66 @@ c
       write(EclData(138:139),'(I2)') KodePM
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+c                                      ! Stationary Solution Parallax
+c                                      ! translate ra, dec by PM
+      if ((KodeAst .lt. 3) .or. (dw1MJD .lt. -1.0e9) .or.
+     +    (KodePM  .eq. 0) .or. (dw2MJD .lt. -1.0e9)) go to 1900
+      ndwMJD     = ndwMJD + 1
+      sumdw1MJD  = sumdw1MJD + dw1MJD
+      sum2dw1MJD = sum2dw1MJD + dw1MJD**2
+      sumdw2MJD  = sumdw2MJD + dw2MJD
+      sum2dw2MJD = sum2dw2MJD + dw2MJD**2
+c
+      dw1MJD = (dw1MJD + dw2MJD)/2.0
+      k = 146
+      Read(Line(IFA(k):IFB(k)), *, err = 1600) pmra
+      pmra = pmra/1314900.0            ! convert asec/yr to deg/day
+      if (dabs(decstat) .ne. 90.0d0) then
+        dRA  = pmra*dw1MJD/dcos(d2r*decstat)
+      else
+        dRA = 0.0d0
+      end if
+      ra = rastat + dRA
+	  if (ra .gt. 360.0d0) then
+		ra = ra - 360.0d0
+	  else if (ra .lt. 0.0d0) then
+		ra = 360.0d0 + ra
+      end if
+      k = 147
+      Read(Line(IFA(k):IFB(k)), *, err = 1600) pmdec
+      pmdec = pmdec/1314900.0
+      dDec = pmdec*dw1mjd
+      dec  = decstat + dDec
+c
+      k = 148
+      Read(Line(IFA(k):IFB(k)), *, err = 1600) sigpmra
+      k = 149
+      Read(Line(IFA(k):IFB(k)), *, err = 1600) sigpmdec
+      sigrastat  = dsqrt(sigrastat**2  + (dw1MJD*sigpmra/365.25)**2)
+      sigdecstat = dsqrt(sigdecstat**2 + (dw1MJD*sigpmdec/365.25)**2)
+c                                      ! Get Ecliptic positions
+      call Cel2Ec(ra,  dec,  EcLong,  EcLat)
+c                                      ! Get Ecliptic position uncertainties
+      call r8covmat(sigrastat,sigdecstat,sigradecstat,-pa,
+     +              EcLongSig,EcLatSig,R8tmp1)    ! ignore Ecl off-diagonal
+c      
+      dEcLong = EcLong2 - EcLong       ! use Desc-Asce for parallax
+      if (dEcLong .gt.  180.0d0) dEcLong = dEcLong - 360.0d0
+      if (dEcLong .lt. -180.0d0) dEcLong = dEcLong + 360.0d0
+      dEcLong = (3600.0d0*dEcLong*dcos(d2r*EcLat) - pBias)/2.0d0
+      dEcLongSig = dsqrt(EcLongSig**2 + EcLongSig2**2)/2.0d0
+      write (ParData(23:44),'(2f11.3)') dEcLong, dEcLongSig
+      go to 1900
+c
+1600  if (dbg) then
+        print *,'WARNING: parallax computation failed for source ',
+     +           Line(IFA(1):IFB(2))
+      end if
+c
+c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Output data row
 c
-      write (20,'(a)') Line(1:1555)//dMagData//EclData//ParData
+1900  write (20,'(a)') Line(1:1555)//dMagData//EclData//ParData
 c     
       if (nRow .lt. nSrc) go to 1000
       close (20)
@@ -1814,12 +1899,24 @@ c
       print *,'No. data rows with mdetID mismatch:      ',
      +         NmdetIDerr
       if (nMJD .gt. 0) then
-       R8tmp1 = sumMJD/dfloat(nMJD)
-       R8tmp2 = dsqrt(dabs(sumMJDsq/dfloat(nMJD)) - R8tmp1**2)
-       print *
-       write(6,
+        R8tmp1 = sumMJD/dfloat(nMJD)
+        R8tmp2 = dsqrt(dabs(sumMJDsq/dfloat(nMJD) - R8tmp1**2))
+        print *
+        write(6,
      + '('' Motion Solution Epoch Mean & Sigma:'',2f10.2,''; N ='',I6)')
-     +      R8tmp1, R8tmp2, nMJD
+     +       R8tmp1, R8tmp2, nMJD
+      end if
+      if (ndwMJD .gt. 0) then
+        R8tmp1 = sumdw1MJD/dfloat(ndwMJD)
+        R8tmp2 = dsqrt(dabs(sum2dw1MJD/dfloat(ndwMJD) - R8tmp1**2))
+        print *
+        print *, 'Asce-Desc MJDmean Differences, no. pts. =',ndwMJD
+        write(6,'('' W1 Difference Mean & Sigma:'',2f10.2)')
+     +               R8tmp1, R8tmp2
+        R8tmp1 = sumdw2MJD/dfloat(ndwMJD)
+        R8tmp2 = dsqrt(dabs(sum2dw2MJD/dfloat(ndwMJD) - R8tmp1**2))
+        write(6,'('' W2 Difference Mean & Sigma:'',2f10.2)')
+     +               R8tmp1, R8tmp2
       end if
 c                                      TJ Statistics
       if (nTJw1 .gt. 1) then
@@ -1845,10 +1942,10 @@ c                                      TJ Statistics
           if (k2 .gt. nTJw1) k2 = nTJw1
         end if
         if (dbg) print *,'W1 trim range:',k1,' to ',k2,' in ',nTJw1
-        do 1600 k = k1, k2
+        do 2000 k = k1, k2
           TJw1Sum      = TJw1Sum   + TJdw1(k)
           TJw1SumSq    = TJw1SumSq + TJdw1(k)**2
-1600    continue
+2000    continue
         dwmpro = TJw1Sum/dfloat(k2-k1+1)
         R8tmp1 = dsqrt(dabs(TJw1SumSq/dfloat(k2-k1+1) - dwmpro**2))
         R8tmp2 = dw1ChSqSum/dfloat(nTJw1)
@@ -1891,10 +1988,10 @@ c
           if (k2 .gt. nTJw2) k2 = nTJw2
         end if
         if (dbg) print *,'W2 trim range:',k1,' to ',k2,' in ',nTJw1
-        do 1610 k = k1, k2
+        do 2010 k = k1, k2
           TJw2Sum      = TJw2Sum   + TJdw2(k)
           TJw2SumSq    = TJw2SumSq + TJdw2(k)**2
-1610    continue
+2010    continue
         dwmpro = TJw2Sum/dfloat(k2-k1+1)
         R8tmp1 = dsqrt(dabs(TJw2SumSq/dfloat(k2-k1+1) - dwmpro**2))
         R8tmp2 = dw2ChSqSum/dfloat(nTJw2)
@@ -1951,7 +2048,7 @@ c
 c
 c-----------------------------------------------------------------------     
 c                                      ! Process chi-square histograms
-      do 2000 k = 1, 20
+      do 2020 k = 1, 20
         call TJsort(Nw1rchi2asce(k), w1rchi2asce(1,k)) 
         call TJsort(Nw1rchi2desc(k), w1rchi2desc(1,k)) 
         call TJsort(Nw1rchi2mrg(k),   w1rchi2mrg(1,k)) 
@@ -1970,13 +2067,13 @@ c                                      ! Process chi-square histograms
         call GetMed(Nrchi2asce(k),     rchi2asce(1,k), MedRchi2(7,k)) 
         call GetMed(Nrchi2desc(k),     rchi2desc(1,k), MedRchi2(8,k)) 
         call GetMed(Nrchi2mrg(k),       rchi2mrg(1,k), MedRchi2(9,k)) 
-2000  continue        
+2020  continue        
 c
       if (index(OutFNam,SlashChar) .gt. 0) then
         k = 0
-        do 2010 n = 1, lnblnk(OutFNam)
+        do 2030 n = 1, lnblnk(OutFNam)
           if (OutFNam(n:n) .eq. SlashChar) k = n
-2010    continue
+2030    continue
         HistNam = OutFNam(1:k)//'hists-'//OutFNam(k+1:lnblnk(OutFNam))
         TJnam   = OutFNam(1:k)//'tjhist-'//OutFNam(k+1:lnblnk(OutFNam))
         if (dbg) print *,'HistNam = ', HistNam(1:lnblnk(HistNam))
