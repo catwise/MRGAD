@@ -36,6 +36,8 @@ c                       Asce-Desc w?mJDmean difference and used to
 c                       propagate Asce RA/Dec to Desc for sole purpose
 c                       of stationary-based parallax estimate; added
 c                       latter to mdex table
+c          1.86 B80329: added test for singular error covariance
+c                       matrices & fix if found
 c
 c-----------------------------------------------------------------------
 c
@@ -66,9 +68,12 @@ c
      +               Nw2rchi2desc(20), Nw2rchi2mrg(20),
      +               Nrchi2asce(20),   Nrchi2desc(20),
      +               Nrchi2mrg(20), nMedDiff, nTJw1, nTJw2,
-     +               TJdw1Hist(51), TJdw2Hist(51), nMJD, ndwMJD
+     +               TJdw1Hist(51), TJdw2Hist(51), nMJD, ndwMJD,
+     +               nBadCovMatA, nBadCovMatD, nBadCovMat,
+     +               nBadCovMatPA, nBadCovMatPD, nBadCovMatP
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
-     +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist
+     +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist,
+     +               GoodDeterm1, GoodDeterm2
       Real*8         ra,  dec,  sigra,  sigdec,  sigradec,
      +               ra2, dec2, sigra2, sigdec2, sigraded, pa,
      +               EcLong, EcLat, EcLong2, EcLat2, EcLongSig,
@@ -94,7 +99,7 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2
 c
-      Data Vsn/'1.85 B80320'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.86 B80329'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -110,7 +115,10 @@ c
      +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
      +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/, ndwMJD/0/,
      +     sumdw1MJD,sumdw2MJD,sum2dw1MJD,sum2dw2MJD/4*0.0d0/,
-     +     rastat,decstat/2*0.0d0/
+     +     rastat,decstat/2*0.0d0/,
+     +     nBadCovMatA,nBadCovMatD,nBadCovMat/3*0/,
+     +     nBadCovMatPA,nBadCovMatPD,nBadCovMatP/3*0/
+
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -495,7 +503,7 @@ c
      +        //' null       null       null       null   '
      +        //'   null       null       null      null    0  n  n  n x'
         if (dbg) print *,
-     +     'Bad ascending AND descending Astrometry on source '
+     +     'Bad ascending AND descending Astrometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) Line(IFA(3):IFB(7)) = Line(IFA(169):IFB(173))
@@ -530,6 +538,10 @@ c                                      ! Check for zero-point straddle
           ra2 = ra2 - 360.0d0        
         end if
       end if
+      if (sigra   .lt. 0.0001) sigra   = 0.0001
+      if (sigra2  .lt. 0.0001) sigra2  = 0.0001
+      if (sigdec  .lt. 0.0001) sigdec  = 0.0001
+      if (sigdec2 .lt. 0.0001) sigdec2 = 0.0001
 c                                      ! save for later parallax estimate
       rastat       = ra
       decstat      = dec
@@ -582,6 +594,27 @@ c                                      ! Get averaged RA & Dec
       omd12 = sigraded*dabs(sigraded)
       omd22 = sigdec2**2
       detd  = omd11*omd22 - omd12**2
+c
+      GoodDeterm1 = deta .gt. 0.0d0    ! check for singular error covariance matrices
+      GoodDeterm2 = detd .gt. 0.0d0
+      if (.not.(GoodDeterm1.and.GoodDeterm2))
+     +           nBadCovMat = nBadCovMat + 1
+      if (.not.GoodDeterm1) then
+        oma11 = sigra**2                 ! A & D error covariance matrices
+        oma22 = sigdec**2
+        deta  = oma11*oma22
+        nBadCovMatA = nBadCovMatA + 1
+        if (dbg) print *, 'Bad Asce covariance matrix on source'
+     +                   //Line(IFA(1):IFB(1))
+      end if
+      if (.not.GoodDeterm2) then
+        omd11 = sigra**2                 ! A & D error covariance matrices
+        omd22 = sigdec**2
+        detd  = omd11*omd22
+        nBadCovMatD = nBadCovMatD + 1
+        if (dbg) print *, 'Bad Desc covariance matrix on source'
+     +                   //Line(IFA(1):IFB(1))
+      end if
 c                                      ! A & D weight (inverse) matrices
       wa11 =  oma22/deta
       wa12 = -oma12/deta
@@ -639,8 +672,8 @@ c
       end if
       go to 1200
 1050  print *,
-     +'ERROR reading nIters/nItert/nSteps/nStept on source',
-     +       Line(IFA(1):IFB(1))
+     +'ERROR reading nIters/nItert/nSteps/nStept on source'
+     +       //Line(IFA(1):IFB(1))
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Process photometric parameters
@@ -800,7 +833,7 @@ c
         nBadW1Phot2 = nBadW1Phot2 + 1
         KodePhot1 = 0     
         if (dbg) print *,
-     +     'Bad ascending AND descending W1 Photrometry on source '
+     +     'Bad ascending AND descending W1 Photrometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
@@ -924,7 +957,7 @@ c
         nBadW2Phot2 = nBadW2Phot2 + 1
         KodePhot2 = 0     
         if (dbg) print *,
-     +     'Bad ascending AND descending W2 Photrometry on source '
+     +     'Bad ascending AND descending W2 Photrometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
@@ -1437,7 +1470,7 @@ c
         nBadPM2 = nBadPM2 + 1
         KodePM = 0     
         if (dbg) print *,
-     +     'Bad ascending AND descending PM on source '
+     +     'Bad ascending AND descending PM on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
@@ -1480,6 +1513,11 @@ c                                      !       positions; code cloned from above
       k = 311
       Read(Line(IFA(k):IFB(k)), *, err = 3006) sigraded     
 c
+      if (sigra   .lt. 0.0001) sigra   = 0.0001
+      if (sigra2  .lt. 0.0001) sigra2  = 0.0001
+      if (sigdec  .lt. 0.0001) sigdec  = 0.0001
+      if (sigdec2 .lt. 0.0001) sigdec2 = 0.0001
+c
       call Cel2Ec(ra,  dec,  EcLong,  EcLat)
       call Cel2Ec(ra2, dec2, EcLong2, EcLat2)
 c                                      ! Get Ecliptic position uncertainties
@@ -1511,6 +1549,27 @@ c
       omd12 = sigraded*dabs(sigraded)
       omd22 = sigdec2**2
       detd  = omd11*omd22 - omd12**2
+c
+      GoodDeterm1 = deta .gt. 0.0d0    ! check for singular error covariance matrices
+      GoodDeterm2 = detd .gt. 0.0d0
+      if (.not.(GoodDeterm1.and.GoodDeterm2))
+     +          nBadCovMatP = nBadCovMatP + 1
+      if (.not.GoodDeterm1) then
+        oma11 = sigra**2                 ! A & D error covariance matrices
+        oma22 = sigdec**2
+        deta  = oma11*oma22
+        nBadCovMatPA = nBadCovMatPA + 1
+        if (dbg) print *, 'Bad Asce motion-position covariance matrix'
+     +                   //' on source'//Line(IFA(1):IFB(1))
+      end if
+      if (.not.GoodDeterm2) then
+        omd11 = sigra**2                 ! A & D error covariance matrices
+        omd22 = sigdec**2
+        detd  = omd11*omd22
+        nBadCovMatPD = nBadCovMatPD + 1
+        if (dbg) print *, 'Bad Desc motion-position covariance matrix'
+     +                   //' on source'//Line(IFA(1):IFB(1))
+      end if
 c                                      ! A & D weight (inverse) matrices
       wa11 =  oma22/deta
       wa12 = -oma12/deta
@@ -1561,6 +1620,11 @@ c                                      !       motions; code cloned from above
       Read(Line(IFA(k):IFB(k)), *, err = 3006) sigra2
       k = 315
       Read(Line(IFA(k):IFB(k)), *, err = 3006) sigdec2
+c
+      if (sigra   .lt. 0.0001) sigra   = 0.0001
+      if (sigra2  .lt. 0.0001) sigra2  = 0.0001
+      if (sigdec  .lt. 0.0001) sigdec  = 0.0001
+      if (sigdec2 .lt. 0.0001) sigdec2 = 0.0001
 c
       v1 = sigra**2
       v2 = sigra2**2
@@ -1861,6 +1925,26 @@ c
         if (nBadAst .ne. nBadAst1+nBadAst2)
      +  print *,'No. of bad ascending AND descending rows:',
      +  nBadAst1+nBadAst2-nBadAst
+      end if
+      print *,'No. data rows with bad stationary-position'
+      print *,'    error covariance matrices'
+     +         //' passed through:          ', nBadCovMat
+      if (nBadCovMat .gt. 0) then
+        print *,'No. of bad ascending rows: ',nBadCovMatA
+        print *,'No. of bad descending rows:',nBadCovMatD
+        if (nBadCovMat .ne. nBadCovMatA+nBadCovMatD)
+     +  print *,'No. of bad ascending AND descending rows:',
+     +  nBadCovMatA+nBadCovMatD-nBadCovMat
+      end if
+      print *,'No. data rows with bad motion-solution position'
+      print *,'    error covariance matrices'
+     +         //' passed through:          ', nBadCovMatP
+      if (nBadCovMatP .gt. 0) then
+        print *,'No. of bad ascending rows: ',nBadCovMatPA
+        print *,'No. of bad descending rows:',nBadCovMatPD
+        if (nBadCovMatP .ne. nBadCovMatPA+nBadCovMatPD)
+     +  print *,'No. of bad ascending AND descending rows:',
+     +  nBadCovMatPA+nBadCovMatPD-nBadCovMatP
       end if
       print *,'No. data rows with bad W1 photometry passed through:   ',
      +         nBadW1Phot
