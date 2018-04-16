@@ -38,6 +38,7 @@ c                       of stationary-based parallax estimate; added
 c                       latter to mdex table
 c          1.86 B80329: added test for singular error covariance
 c                       matrices & fix if found
+c          1.86 B80415: switch TJ rchi2 from avg to median
 c
 c-----------------------------------------------------------------------
 c
@@ -96,20 +97,22 @@ c
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
      +               w1rchi2mrg(:,:), w2rchi2mrg(:,:), rchi2asce(:,:),
-     +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:)
-      Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2
+     +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:),
+     +               dw1ChSq(:), dw2ChSq(:)
+      Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
+     +               rchisq 
 c
-      Data Vsn/'1.86 B80329'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.86 B80415'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
-     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.1d0/,
+     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.09d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
      +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/, SlashChar/'/'/,
      +     dMagData/'  null   null   null   null  '/, Nw1rchi2asce,
      +     Nw1rchi2desc,Nw1rchi2mrg,Nw2rchi2asce, Nw2rchi2desc,
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/,
-     +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.05/,
+     +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.1/,
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
      +     dw1ChSqSum,dw2ChSqsum/2*0.0d0/, nTJw1, nTJw2/2*0/,
      +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
@@ -138,10 +141,10 @@ c
         print *
         print *,'The OPTIONAL flags are:'
         print *,'    -cr maximum chi-square ratio for averaging (3.0)'
-        print *,'    -pb parallax bias (asec; 0.1)'
+        print *,'    -pb parallax bias correction (asec; 0.09)'
         print *,'    -t1 lower S/N limit for TJ statistics (19.5)'
         print *,'    -t2 upper S/N limit for TJ statistics (20.5)'
-        print *,'    -tf trim fraction for TJ statistics (0.05)'
+        print *,'    -tf trim fraction for TJ statistics (0.1)'
         print *,'    -th generate TJ histogram table file'
         print *,'    -w  testing on Windows machine'
         print *,'    -d  turn on debug prints'
@@ -372,9 +375,23 @@ c                                      ! Allocate arrays for TJ Statistics
         call exit(64)
       end if
 c
+      allocate(dw1ChSq(nSrc))
+      if (.not.allocated(dw1ChSq)) then
+        print *,'ERROR: allocation of dw1ChSq failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
       allocate(TJdw2(nSrc))
       if (.not.allocated(TJdw2)) then
         print *,'ERROR: allocation of TJdw2 failed'
+        print *,'       no. elements =',nSrc
+        call exit(64)
+      end if
+c
+      allocate(dw2ChSq(nSrc))
+      if (.not.allocated(dw2ChSq)) then
+        print *,'ERROR: allocation of dw2ChSq failed'
         print *,'       no. elements =',nSrc
         call exit(64)
       end if
@@ -869,11 +886,12 @@ c
       write (dMagData(1:14),'(2F7.3)') dwmpro, rchi2dwm
 c                                      ! TJ Statistics
       if (doTJw1) then
-        nTJw1        = nTJw1 + 1
-        TJdw1(nTJw1) = dwmpro
-        TJw1SumSigA  = TJw1SumSigA + dsqrt(v1)
-        TJw1SumSigD  = TJw1SumSigD + dsqrt(v2)
-        dw1ChSqSum   = dw1ChSqSum + dwmpro**2/(v1+v2)
+        nTJw1          = nTJw1 + 1
+        TJdw1(nTJw1)   = dwmpro
+        TJw1SumSigA    = TJw1SumSigA + dsqrt(v1)
+        TJw1SumSigD    = TJw1SumSigD + dsqrt(v2)
+        dw1ChSq(nTJw1) = dwmpro**2/(v1+v2)
+        dw1ChSqSum     = dw1ChSqSum + dwmpro**2/(v1+v2)
         k = (50.5*(dwmpro + 0.5)) + 1
         if (k .lt. 1)  k = 1
         if (k .gt. 51) k = 51
@@ -1003,8 +1021,7 @@ c                                      ! TJ Statistics
       if (doTJw2) then
         nTJw2        = nTJw2 + 1
         TJdw2(nTJw2) = dwmpro
-c       TJw2Sum      = TJw2Sum   + dwmpro
-c       TJw2SumSq    = TJw2SumSq + dwmpro**2
+        dw2ChSq(nTJw2) = dwmpro**2/(v1+v2)
         TJw2SumSigA  = TJw2SumSigA + dsqrt(v1)
         TJw2SumSigD  = TJw2SumSigD + dsqrt(v2)
         dw2ChSqSum   = dw2ChSqSum + dwmpro**2/(v1+v2)
@@ -2009,13 +2026,18 @@ c                                      TJ Statistics
      +   '------------------ TJ Statistics for W1 -----------------'
         write(6,'(''w1snr range:'',f6.2,'' to '',f6.2)') TJsnr1, TJsnr2
         call TJsort(nTJw1,TJdw1)
+        call TJsort(nTJw1,dw1ChSq)
         k = nTJw1/2
         if (mod(nTJw1,2) .eq. 0) then
-          dwmpro = (TJdw1(k) + TJdw1(k+1))/2.0
+          dwmpro = (TJdw1(k)   +   TJdw1(k+1))/2.0
+          rchisq = (dw1ChSq(k) + dw1ChSq(k+1))/2.0
         else
           dwmpro = TJdw1(k+1)
+          rchisq = dw1ChSq(k+1)
         end if
-        write(6,'(''median dw1mpro ='',f8.4)') dwmpro
+        write(6,
+     +  '(''median dw1mpro ='',f8.4,''; median rchisq ='',f8.4)')
+     +      dwmpro, rchisq
         k1 = NInt(TrFrac*(float(nTJw1)))
         k2 = NInt((1.0 - TrFrac)*(float(nTJw1)))
         if (k1 .lt. 1) k1 = 1
@@ -2055,13 +2077,18 @@ c
      +   '------------------ TJ Statistics for W2 -----------------'
         write(6,'(''w2snr range:'',f6.2,'' to '',f6.2)') TJsnr1, TJsnr2
         call TJsort(nTJw2,TJdw2)
+        call TJsort(nTJw2,dw2ChSq)
         k = nTJw2/2
         if (mod(nTJw2,2) .eq. 0) then
-          dwmpro = (TJdw2(k) + TJdw2(k+1))/2.0
+          dwmpro = (TJdw2(k)   +   TJdw2(k+1))/2.0
+          rchisq = (dw2ChSq(k) + dw2ChSq(k+1))/2.0
         else
           dwmpro = TJdw2(k+1)
+          rchisq = dw2ChSq(k+1)
         end if
-        write(6,'(''median dw2mpro ='',f8.4)') dwmpro
+        write(6,
+     +  '(''median dw2mpro ='',f8.4,''; median rchisq ='',f8.4)')
+     +      dwmpro, rchisq
         k1 = NInt(TrFrac*(float(nTJw2)))
         k2 = NInt((1.0 - TrFrac)*(float(nTJw2)))
         if (k1 .lt. 1) k1 = 1
