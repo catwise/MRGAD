@@ -39,6 +39,8 @@ c                       latter to mdex table
 c          1.86 B80329: added test for singular error covariance
 c                       matrices & fix if found
 c          1.86 B80415: switch TJ rchi2 from avg to median
+c          1.86 B80505: remove avg chisq from TJ stats; extreme
+c                       asymmetry --> too misleading; median better
 c
 c-----------------------------------------------------------------------
 c
@@ -88,7 +90,7 @@ c
      +               dwmpro, ChiSqRat, wrchi2a, wrchi2d, wmpro,
      +               rchi2a, rchi2d, rchi2, TJw1Sum, TJw1SumSq,
      +               TJw2Sum, TJw2SumSq, TJw1SumSigA, TJw2SumSigA,
-     +               TJw1SumSigD, TJw2SumSigD, dw1ChSqSum, dw2ChSqsum,
+     +               TJw1SumSigD, TJw2SumSigD,
      +               sumMJD, sumMJDsq, rchi2dwm, rastat, decstat, 
      +               sigrastat, sigdecstat, sigradecstat, dw1MJD,
      +               dw2MJD, sumdw1MJD, sumdw2MJD, sum2dw1MJD,
@@ -102,7 +104,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq 
 c
-      Data Vsn/'1.86 B80415'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.86 B80505'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -114,7 +116,7 @@ c
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/,
      +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.1/,
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
-     +     dw1ChSqSum,dw2ChSqsum/2*0.0d0/, nTJw1, nTJw2/2*0/,
+     +     nTJw1, nTJw2/2*0/,
      +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
      +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/, ndwMJD/0/,
      +     sumdw1MJD,sumdw2MJD,sum2dw1MJD,sum2dw2MJD/4*0.0d0/,
@@ -891,7 +893,6 @@ c                                      ! TJ Statistics
         TJw1SumSigA    = TJw1SumSigA + dsqrt(v1)
         TJw1SumSigD    = TJw1SumSigD + dsqrt(v2)
         dw1ChSq(nTJw1) = dwmpro**2/(v1+v2)
-        dw1ChSqSum     = dw1ChSqSum + dwmpro**2/(v1+v2)
         k = (50.5*(dwmpro + 0.5)) + 1
         if (k .lt. 1)  k = 1
         if (k .gt. 51) k = 51
@@ -1024,7 +1025,6 @@ c                                      ! TJ Statistics
         dw2ChSq(nTJw2) = dwmpro**2/(v1+v2)
         TJw2SumSigA  = TJw2SumSigA + dsqrt(v1)
         TJw2SumSigD  = TJw2SumSigD + dsqrt(v2)
-        dw2ChSqSum   = dw2ChSqSum + dwmpro**2/(v1+v2)
         k = (50.5*(dwmpro + 0.5)) + 1
         if (k .lt. 1)  k = 1
         if (k .gt. 51) k = 51
@@ -2054,9 +2054,8 @@ c                                      TJ Statistics
 2000    continue
         dwmpro = TJw1Sum/dfloat(k2-k1+1)
         R8tmp1 = dsqrt(dabs(TJw1SumSq/dfloat(k2-k1+1) - dwmpro**2))
-        R8tmp2 = dw1ChSqSum/dfloat(nTJw1)
-        write(6,'(''mean dw1mpro ='',f8.4,''; sigma ='',f8.4,'
-     +  //'''; rchisq ='',f8.4)')dwmpro, R8tmp1, R8tmp2
+        write(6,'(''mean dw1mpro ='',f8.4,''; sigma ='',f8.4)')
+     +              dwmpro, R8tmp1
         v1 = TJw1SumSigA/dfloat(nTJw1)
         v2 = TJw1SumSigD/dfloat(nTJw1)
         write(6,'(''Mean w1sigmpro ascending:'',f8.4,'
@@ -2105,9 +2104,8 @@ c
 2010    continue
         dwmpro = TJw2Sum/dfloat(k2-k1+1)
         R8tmp1 = dsqrt(dabs(TJw2SumSq/dfloat(k2-k1+1) - dwmpro**2))
-        R8tmp2 = dw2ChSqSum/dfloat(nTJw2)
-        write(6,'(''mean dw2mpro ='',f8.4,''; sigma ='',f8.4,'
-     +  //'''; rchisq ='',f8.4)')dwmpro, R8tmp1, R8tmp2
+        write(6,'(''mean dw1mpro ='',f8.4,''; sigma ='',f8.4)')
+     +              dwmpro, R8tmp1
         v1 = TJw2SumSigA/dfloat(nTJw2)
         v2 = TJw2SumSigD/dfloat(nTJw2)
         write(6,'(''Mean w2sigmpro ascending:'',f8.4,'
