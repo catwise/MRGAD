@@ -41,6 +41,8 @@ c                       matrices & fix if found
 c          1.86 B80415: switch TJ rchi2 from avg to median
 c          1.86 B80505: remove avg chisq from TJ stats; extreme
 c                       asymmetry --> too misleading; median better
+c          1.87 B80514: added galactic & ecliptic coordinates to "hists"
+c                       headers
 c
 c-----------------------------------------------------------------------
 c
@@ -73,7 +75,8 @@ c
      +               Nrchi2mrg(20), nMedDiff, nTJw1, nTJw2,
      +               TJdw1Hist(51), TJdw2Hist(51), nMJD, ndwMJD,
      +               nBadCovMatA, nBadCovMatD, nBadCovMat,
-     +               nBadCovMatPA, nBadCovMatPD, nBadCovMatP
+     +               nBadCovMatPA, nBadCovMatPD, nBadCovMatP,
+     +               nAlpha1, nAlpha2
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
      +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist,
      +               GoodDeterm1, GoodDeterm2
@@ -90,11 +93,12 @@ c
      +               dwmpro, ChiSqRat, wrchi2a, wrchi2d, wmpro,
      +               rchi2a, rchi2d, rchi2, TJw1Sum, TJw1SumSq,
      +               TJw2Sum, TJw2SumSq, TJw1SumSigA, TJw2SumSigA,
-     +               TJw1SumSigD, TJw2SumSigD,
+     +               TJw1SumSigD, TJw2SumSigD, sumAlpha1, sumAlpha2,
      +               sumMJD, sumMJDsq, rchi2dwm, rastat, decstat, 
      +               sigrastat, sigdecstat, sigradecstat, dw1MJD,
      +               dw2MJD, sumdw1MJD, sumdw2MJD, sum2dw1MJD,
-     +               sum2dw2MJD, PMRA, sigPMRA, PMDec, sigPMDec
+     +               sum2dw2MJD, PMRA, sigPMRA, PMDec, sigPMDec,
+     +               Alpha1, sumDec1, sumDec2
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -102,9 +106,9 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:),
      +               dw1ChSq(:), dw2ChSq(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
-     +               rchisq 
+     +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.86 B80505'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.87 B80514'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -116,13 +120,14 @@ c
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/,
      +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.1/,
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
-     +     nTJw1, nTJw2/2*0/,
-     +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/19.5/, TJsnr2/20.5/,
+     +     nTJw1, nTJw2/2*0/, Alpha1/0.0d0/,
+     +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/9.98/, TJsnr2/10.02/,
      +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/, ndwMJD/0/,
      +     sumdw1MJD,sumdw2MJD,sum2dw1MJD,sum2dw2MJD/4*0.0d0/,
-     +     rastat,decstat/2*0.0d0/,
+     +     rastat,decstat/2*0.0d0/, nAlpha1,nAlpha2/2*0/,
      +     nBadCovMatA,nBadCovMatD,nBadCovMat/3*0/,
-     +     nBadCovMatPA,nBadCovMatPD,nBadCovMatP/3*0/
+     +     nBadCovMatPA,nBadCovMatPD,nBadCovMatP/3*0/,
+     +     sumAlpha1,sumAlpha2,sumDec1, sumDec2/4*0.0d0/
 
 c
       Common / VDT / CDate, CTime, Vsn
@@ -144,8 +149,8 @@ c
         print *,'The OPTIONAL flags are:'
         print *,'    -cr maximum chi-square ratio for averaging (3.0)'
         print *,'    -pb parallax bias correction (asec; 0.09)'
-        print *,'    -t1 lower S/N limit for TJ statistics (19.5)'
-        print *,'    -t2 upper S/N limit for TJ statistics (20.5)'
+        print *,'    -t1 lower S/N limit for TJ statistics (9.98)'
+        print *,'    -t2 upper S/N limit for TJ statistics (10.02)'
         print *,'    -tf trim fraction for TJ statistics (0.1)'
         print *,'    -th generate TJ histogram table file'
         print *,'    -w  testing on Windows machine'
@@ -657,6 +662,24 @@ c
       ra  = v11*R8tmp1 + v12*R8tmp2
       dec = v12*R8tmp1 + v22*R8tmp2
       if (ra .lt. 0.0d0) ra = ra + 360.0d0
+c
+      if (nAlPha1 .eq. 0) then
+        nAlpha1   = 1
+        sumAlpha1 = ra
+        sumDec1   = dec
+        Alpha1    = ra
+      end if
+      if (nAlpha1 .gt. 0) then
+        if (dabs(ra-Alpha1) .lt. 180.0d0) then
+          nAlpha1 = nAlpha1 + 1
+          sumAlpha1 = sumAlpha1 + ra
+          sumDec1   = sumDec1 + dec
+        else
+          nAlpha2 = nAlpha2 + 1
+          sumAlpha2 = sumAlpha2 + ra        
+          sumDec2   = sumDec2 + dec
+        end if
+      end if
 c     
       sigra    = dsqrt(v11)
       sigdec   = dsqrt(v22)
@@ -2191,7 +2214,23 @@ c
         TJnam   = 'tjhist-'//OutFNam
       end if
 c
+      if (nAlpha1 .gt. nAlpha2) then
+        ra  = sumAlpha1/dfloat(nAlpha1)
+        dec = sumDec1/dfloat(nAlpha1)
+      else
+        ra  = sumAlpha2/dfloat(nAlpha2)
+        dec = sumDec2/dfloat(nAlpha2)
+      end if
+      call cel2gal(sngl(ra), sngl(dec), GaLong, GaLat)
+      call Cel2Ec(ra, dec, EcLong, EcLat)
+c
       open (24, file = HistNam)
+      write (24,'(''\ Mean Galactic Longitude and Latitude: '',2f10.4)')
+     +       GaLong, GaLat
+      write (24,'(''\ Mean Ecliptic Longitude and Latitude: '',2f10.4)')
+     +       EcLong, EcLat
+      write (24,'(''\ Mean Right Ascension and Declination: '',2f10.4)')
+     +       ra, dec
       write (24,'(a)') '|bin|wmpro|w1rchi2a| nw1a|w1rchi2d| nw1d|'
      + //'w1rchi2m| nw1m|w2rchi2a| nw2a|w2rchi2d| nw2d|w2rchi2m| nw2m|'
      + //' rchi2a |nasce| rchi2d |ndesc| rchi2m | nmrg|'
@@ -2264,47 +2303,40 @@ c
       call signoff('mrgad')
       stop
 c
-3000  print *,'ERROR: Eof-of-file encountered in gsa input file '
+3000  print *,'ERROR: End-of-file encountered in gsa input file '
      +      //'before data found'
-      call exit(64)
-      stop
+      go to 3030
 c
-3001  print *,'ERROR: Eof-of-file encountered in ascending stf '
+3001  print *,'ERROR: End-of-of-file encountered in ascending stf '
      +      //'file before data found'
-      call exit(64)
-      stop
+      go to 3030
 c
-3002  print *,'ERROR: Eof-of-file encountered in descending stf '
+3002  print *,'ERROR: End-of-file encountered in descending stf '
      +      //'file before data found'
-      call exit(64)
-      stop
+      go to 3030
 c
 3003  print *,'ERROR: read error encountered in ascending stf '
      +      //'file line:'
       print *,Line
-      call exit(64)
-      stop
+      go to 3030
 c
 3004  print *,'ERROR: read error encountered in descending stf '
      +      //'file line:'
       print *,Line
-      call exit(64)
-      stop
+      go to 3030
 c
-3005  print *,'ERROR: unexpected Eof-of-file encountered in gsa input file '
+3005  print *,'ERROR: unexpected End-of-file encountered in gsa input file '
      +      //'while reading data'
       print *,'       Attempted to read data for source no.',nRow
       print *,'       Expected',nSrc,' sources'
-      call exit(64)
-      stop
+      go to 3030
 c
 3006  print *,'ERROR: read error encountered in gsa input file '
      +      //'on data line no.',nRow
       print *,'       Data field no.',k,', column name "',
      +                Field(k)(1:lnblnk(Field(k))),'"'
       print *,'        Numeric field: "',Line(IFA(k):IFB(k)),'"'
-      call exit(64)
-      stop
+      go to 3030
 c
 3007  print *,'ERROR: bad specification for "-pb":', NumStr
       call exit(64)
@@ -2325,7 +2357,11 @@ c
 3011  print *,'ERROR: bad specification for "-t2":', NumStr
       call exit(64)
       stop
-c      
+c
+3030  continue
+c TBD  signal error to cognizant folks
+      call exit(64)
+      stop      
       end
 c
 c-----------------------------------------------------------------------
@@ -2662,6 +2698,31 @@ c
       sigY2   = dsqrt(dabs(u22))
       sigX2Y2 = dsqrt(dabs(u12))
       if (t12 .lt. 0.0d0) sigX2Y2 = -sigX2Y2
+c
+      return
+      end
+c
+c-----------------------------------------------------------------------
+c
+      subroutine Cel2Gal(RA, Dec, Long, Lat)
+c
+      real*4 RA, Dec, Long, Lat, RA0, cDec0, sDec0, Long0, d2r,
+     +       cRA, cDec, sRA, sDec
+c
+      data d2r/1.745329252e-2/, RA0/192.8595/, sDec0/0.4559861/,
+     +     cDec0/0.889987/, Long0/122.9320/
+c
+c-----------------------------------------------------------------------
+c
+      cRA   = cos(d2r*(RA-RA0))
+      cDec  = cos(d2r*Dec)
+      sRA   = sin(d2r*(RA-RA0))
+      sDec  = sin(d2r*Dec)
+c      
+      Lat  = asin(sDec0*sDec + cDec0*cDec*cRA)/d2r
+      Long = Long0 - atan2(cDec*sRA,cDec0*sDec - sDec0*cDec*cRA)/d2r
+      
+      if (Long .lt. 0.0) Long = Long + 360.0
 c
       return
       end
