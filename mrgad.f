@@ -2227,6 +2227,8 @@ c
       open (24, file = HistNam)
       write (24,'(''\ Mean Galactic Longitude and Latitude: '',2f10.4)')
      +       GaLong, GaLat
+      write (6,'('' Mean Galactic Longitude and Latitude: '',2f10.4)')
+     +       GaLong, GaLat
       write (24,'(''\ Mean Ecliptic Longitude and Latitude: '',2f10.4)')
      +       EcLong, EcLat
       write (24,'(''\ Mean Right Ascension and Declination: '',2f10.4)')
