@@ -42,7 +42,9 @@ c          1.86 B80415: switch TJ rchi2 from avg to median
 c          1.86 B80505: remove avg chisq from TJ stats; extreme
 c                       asymmetry --> too misleading; median better
 c          1.87 B80514: added galactic & ecliptic coordinates to "hists"
+c          1.88 B80518: added galactic & ecliptic coordinates to "hists"
 c                       headers
+c          1.88 B80520: added window options for TJ Statistics
 c
 c-----------------------------------------------------------------------
 c
@@ -76,7 +78,7 @@ c
      +               TJdw1Hist(51), TJdw2Hist(51), nMJD, ndwMJD,
      +               nBadCovMatA, nBadCovMatD, nBadCovMat,
      +               nBadCovMatPA, nBadCovMatPD, nBadCovMatP,
-     +               nAlpha1, nAlpha2
+     +               nAlpha1, nAlpha2, tw
       Logical*4      dbg, GotIn, GotOut, GotInA, GotInD, Good1, Good2,
      +               GoodCh1, GoodCh2, doTJw1, doTJw2, doTJhist,
      +               GoodDeterm1, GoodDeterm2
@@ -108,7 +110,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.87 B80514'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.88 B80520'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -120,7 +122,7 @@ c
      +     Nw2rchi2mrg,Nrchi2asce,Nrchi2desc,Nrchi2mrg/180*0/,
      +     TJw1Sum,TJw1SumSq,TJw2Sum,TJw2SumSq/4*0.0d0/, TrFrac/0.1/,
      +     TJw1SumSigA,TJw2SumSigA,TJw1SumSigD,TJw2SumSigD/4*0.0d0/,
-     +     nTJw1, nTJw2/2*0/, Alpha1/0.0d0/,
+     +     nTJw1, nTJw2/2*0/, Alpha1/0.0d0/, tw/1/,
      +     TJdw1Hist,TJdw2Hist/102*0/, TJsnr1/9.98/, TJsnr2/10.02/,
      +     sumMJD,sumMJDsq/2*0.0d0/, nMJD/0/, ndwMJD/0/,
      +     sumdw1MJD,sumdw2MJD,sum2dw1MJD,sum2dw2MJD/4*0.0d0/,
@@ -153,6 +155,7 @@ c
         print *,'    -t2 upper S/N limit for TJ statistics (10.02)'
         print *,'    -tf trim fraction for TJ statistics (0.1)'
         print *,'    -th generate TJ histogram table file'
+        print *,'    -tw S/N window type for TJ statistics, 0-2 (1)'
         print *,'    -w  testing on Windows machine'
         print *,'    -d  turn on debug prints'
         call exit(32)
@@ -230,6 +233,13 @@ c                                      ! trim fraction
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3009) TrFrac
         if (dbg) print *, 'trim fraction:', TrFrac
+c                                      ! trim fraction
+      else if (Flag .eq. '-TW') then
+        call NextNarg(NArg,Nargs)
+        call GetArg(NArg,NumStr)
+        read (NumStr, *, err=3012) tw
+        if ((tw .lt. 0) .or. (tw .gt. 2)) go to 3012
+        if (dbg) print *, 'TJ window type', tw
 c                                      ! lower S/N limit
       else if (Flag .eq. '-T1') then
         call NextNarg(NArg,Nargs)
@@ -773,6 +783,15 @@ c
         Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1snr2
         doTJw1 = ((R8tmp1 .ge. TJsnr1) .or. (R8tmp2 .ge. TJsnr1)) .and.
      +           ((R8tmp1 .le. TJsnr2) .or. (R8tmp2 .le. TJsnr2))
+        if (doTJw1 .and. (tw .ne. 0)) then
+          if (tw .eq. 1) then
+            doTJw1 = ((R8tmp1 .ge. TJsnr1) .and. (R8tmp1 .le. TJsnr2))
+     +          .or. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
+          else
+            doTJw1 = ((R8tmp1 .ge. TJsnr1) .and. (R8tmp1 .le. TJsnr2))
+     +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
+          end if
+        end if
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
         write (Line(IFA(20):IFB(20)), '(F7.1)') R8tmp1
       else if (Good2) then
@@ -788,6 +807,15 @@ c
         Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2snr2
         doTJw2 = ((R8tmp1 .ge. TJsnr1) .or. (R8tmp2 .ge. TJsnr1)) .and.
      +           ((R8tmp1 .le. TJsnr2) .or. (R8tmp2 .le. TJsnr2))
+        if (doTJw2 .and. (tw .ne. 0)) then
+          if (tw .eq. 1) then
+            doTJw2 = ((R8tmp1 .ge. TJsnr1) .and. (R8tmp1 .le. TJsnr2))
+     +          .or. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
+          else
+            doTJw2 = ((R8tmp1 .ge. TJsnr1) .and. (R8tmp1 .le. TJsnr2))
+     +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
+          end if
+        end if
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
         write (Line(IFA(21):IFB(21)), '(F7.1)') R8tmp1
       else if (Good2) then
@@ -2231,7 +2259,11 @@ c
      +       GaLong, GaLat
       write (24,'(''\ Mean Ecliptic Longitude and Latitude: '',2f10.4)')
      +       EcLong, EcLat
+      write (6,'('' Mean Ecliptic Longitude and Latitude: '',2f10.4)')
+     +       EcLong, EcLat
       write (24,'(''\ Mean Right Ascension and Declination: '',2f10.4)')
+     +       ra, dec
+      write (6,'('' Mean Right Ascension and Declination: '',2f10.4)')
      +       ra, dec
       write (24,'(a)') '|bin|wmpro|w1rchi2a| nw1a|w1rchi2d| nw1d|'
      + //'w1rchi2m| nw1m|w2rchi2a| nw2a|w2rchi2d| nw2d|w2rchi2m| nw2m|'
@@ -2329,34 +2361,39 @@ c
 c
 3005  print *,'ERROR: unexpected End-of-file encountered in gsa input file '
      +      //'while reading data'
-      print *,'       Attempted to read data for source no.',nRow
-      print *,'       Expected',nSrc,' sources'
+      print *,'       Attempted to read data for source no. ',nRow
+      print *,'       Expected ',nSrc,' sources'
       go to 3030
 c
 3006  print *,'ERROR: read error encountered in gsa input file '
-     +      //'on data line no.',nRow
-      print *,'       Data field no.',k,', column name "',
+     +      //'on data line no. ',nRow
+      print *,'       Data field no. ',k,', column name "',
      +                Field(k)(1:lnblnk(Field(k))),'"'
       print *,'        Numeric field: "',Line(IFA(k):IFB(k)),'"'
       go to 3030
 c
-3007  print *,'ERROR: bad specification for "-pb":', NumStr
+3007  print *,'ERROR: bad specification for "-pb": ', NumStr
       call exit(64)
       stop
 c
-3008  print *,'ERROR: bad specification for "-cr":', NumStr
+3008  print *,'ERROR: bad specification for "-cr": ', NumStr
       call exit(64)
       stop
 c
-3009  print *,'ERROR: bad specification for "-tf":', NumStr
+3009  print *,'ERROR: bad specification for "-tf": ', NumStr
       call exit(64)
       stop
 c
-3010  print *,'ERROR: bad specification for "-t1":', NumStr
+3010  print *,'ERROR: bad specification for "-t1": ', NumStr
       call exit(64)
       stop
 c
-3011  print *,'ERROR: bad specification for "-t2":', NumStr
+3011  print *,'ERROR: bad specification for "-t2" :', NumStr
+      call exit(64)
+      stop
+c
+3012  print *,'ERROR: bad specification for "-tw": ', NumStr
+      print *,'       must be 0, 1, or 2'
       call exit(64)
       stop
 c
