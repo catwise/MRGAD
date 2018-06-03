@@ -48,6 +48,7 @@ c          1.88 B80520: added window options for TJ Statistics
 c          1.88 B80601: changed "error covariance" to "errcov" in
 c                       summary to avoid false alarms in searches for
 c                       "error" in stdouts
+c          1.88 B80603: don't call GetMed for empty array
 c
 c-----------------------------------------------------------------------
 c
@@ -113,7 +114,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.88 B80601'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.88 B80603'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -2677,6 +2678,8 @@ c
       integer*4 N, k
       real*4    array(N), med
 c
+c     print *,'GetMed: N = ',N
+      if (N .lt. 1) return
       k = N/2
       if (mod(N,2) .eq. 1) then
         med = array(k+1) 
