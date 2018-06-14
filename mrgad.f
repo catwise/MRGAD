@@ -49,6 +49,8 @@ c          1.88 B80601: changed "error covariance" to "errcov" in
 c                       summary to avoid false alarms in searches for
 c                       "error" in stdouts
 c          1.88 B80603: don't call GetMed for empty array
+c          1.89 B80614: fixed column overflow problems for w?snr and
+c                       w?snr_pm
 c
 c-----------------------------------------------------------------------
 c
@@ -114,7 +116,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.88 B80603'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.89 B80614'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -797,6 +799,7 @@ c
           end if
         end if
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
         write (Line(IFA(20):IFB(20)), '(F7.1)') R8tmp1
       else if (Good2) then
         Line(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
@@ -821,6 +824,7 @@ c
           end if
         end if
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
         write (Line(IFA(21):IFB(21)), '(F7.1)') R8tmp1
       else if (Good2) then
         Line(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
@@ -1777,6 +1781,7 @@ c
         k = 150
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1snr_pm
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
         write (Line(IFA(k):IFB(k)), '(F9.1)') R8tmp1
       else if (Good2) then
         Line(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
@@ -1790,6 +1795,7 @@ c
         k = 151
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2snr_pm
         R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
         write (Line(IFA(k):IFB(k)), '(F9.1)') R8tmp1
       else if (Good2) then
         Line(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
