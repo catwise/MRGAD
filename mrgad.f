@@ -51,6 +51,7 @@ c                       "error" in stdouts
 c          1.88 B80603: don't call GetMed for empty array
 c          1.89 B80614: fixed column overflow problems for w?snr and
 c                       w?snr_pm
+c          1.90 B80617: fixed typo in w2MJDmean average
 c
 c-----------------------------------------------------------------------
 c
@@ -116,7 +117,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.89 B80614'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.90 B80617'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1460,7 +1461,7 @@ c
           Line(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
           v1 = R8tmp2
         else
-          v2 = R8tmp1
+          v1 = R8tmp1
         end if      
         k = 284
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmax2
