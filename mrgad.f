@@ -52,6 +52,7 @@ c          1.88 B80603: don't call GetMed for empty array
 c          1.89 B80614: fixed column overflow problems for w?snr and
 c                       w?snr_pm
 c          1.90 B80617: fixed typo in w2MJDmean average
+c          1.91 B80630: fixed w?MJDmean computation
 c
 c-----------------------------------------------------------------------
 c
@@ -117,7 +118,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat 
 c
-      Data Vsn/'1.90 B80617'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.91 B80630'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1417,15 +1418,14 @@ c
         k = 108
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmean
         dw1MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
+        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
         k = 272
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmin2
         k = 106
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmin
         if (R8tmp2 .lt. R8tmp1) then
           Line(IFA(106):IFB(106)) = Line(IFA(272):IFB(272))
-          v1 = R8tmp2
-        else
-          v1 = R8tmp1
         end if
         k = 273
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmax2
@@ -1433,13 +1433,8 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmax
         if (R8tmp2 .gt. R8tmp1) then
           Line(IFA(107):IFB(107)) = Line(IFA(273):IFB(273))
-          v2 = R8tmp2
-        else
-          v2 = R8tmp1
         end if
         k = 108
-        R8tmp1 = (v1+v2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
       else if (Good2) then
         Line(IFA(106):IFB(108)) = Line(IFA(272):IFB(274))
       end if
@@ -1453,15 +1448,14 @@ c
         k = 119
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmean
         dw2MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
+        R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
+        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
         k = 283
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmin2
         k = 117
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmin
         if (R8tmp2 .lt. R8tmp1) then
           Line(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
-          v1 = R8tmp2
-        else
-          v1 = R8tmp1
         end if      
         k = 284
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmax2
@@ -1469,13 +1463,8 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmax
         if (R8tmp2 .gt. R8tmp1) then
           Line(IFA(118):IFB(118)) = Line(IFA(284):IFB(284))
-          v2 = R8tmp2
-        else
-          v2 = R8tmp1
         end if
         k = 119
-        R8tmp1 = (v1+v2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
       else if (Good2) then
         Line(IFA(117):IFB(119)) = Line(IFA(283):IFB(285))
       end if
