@@ -53,6 +53,7 @@ c          1.89 B80614: fixed column overflow problems for w?snr and
 c                       w?snr_pm
 c          1.90 B80617: fixed typo in w2MJDmean average
 c          1.91 B80630: fixed w?MJDmean computation
+c          1.92 B81008: fixed NaNs fom zero w?sigmpros
 c
 c-----------------------------------------------------------------------
 c
@@ -116,9 +117,9 @@ c
      +               rchi2desc(:,:), rchi2mrg(:,:), TJdw1(:), TJdw2(:),
      +               dw1ChSq(:), dw2ChSq(:)
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
-     +               rchisq, GaLong, GaLat 
+     +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.91 B80630'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.92 B81008'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -925,8 +926,10 @@ c
 1250  KodePhot1 = 3
       k = 27
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1sigmpro
+      if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
       k = 193
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1sigmprp
+      if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
       v1 = R8tmp1**2
       v2 = R8tmp2**2
       k = 192
@@ -1049,8 +1052,10 @@ c
 1270  KodePhot2 = 3
       k = 30
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2sigmpr0
+      if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
       k = 196
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2sigmprp
+      if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
       v1 = R8tmp1**2
       v2 = R8tmp2**2
       k = 195
@@ -1859,8 +1864,10 @@ c
       if (Good1 .and. Good2) then
         k = 323
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1sigmpro_pn
+        if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
         k = 157
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1sigmpro_pm
+        if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
         v1 = R8tmp1**2
         v2 = R8tmp2**2
         k = 322
@@ -1890,8 +1897,10 @@ c
       if (Good1 .and. Good2) then
         k = 326
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2sigmpro_pn
+        if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
         k = 160
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2sigmpro_pm
+        if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
         v1 = R8tmp1**2
         v2 = R8tmp2**2
         k = 325
