@@ -56,6 +56,7 @@ c          1.91 B80630: fixed w?MJDmean computation
 c          1.92 B81008: fixed NaNs from zero w?sigmpros
 c          1.93 B81108: removed above inverse-var magnitude averaging
 c          1.94 B81108: installed mag computation from avg fluxes
+c          1.95 B81124: installed mag upper limit logic
 c
 c-----------------------------------------------------------------------
 c
@@ -112,7 +113,8 @@ c
      +               dw2MJD, sumdw1MJD, sumdw2MJD, sum2dw1MJD,
      +               sum2dw2MJD, PMRA, sigPMRA, PMDec, sigPMDec,
      +               Alpha1, sumDec1, sumDec2, w1flux, w1sigflux,
-     +               w2flux, w2sigflux, w1m0, w2m0, CoefMag, wsigmpro
+     +               w2flux, w2sigflux, w1m0, w2m0, CoefMag, wsigmpro,
+     +               w1snr, w2snr
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -122,7 +124,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.94 B81108'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.95 B81124'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -678,8 +680,8 @@ c                                      ! Inverse of the weight sum matrix
       v12 = -wad12/detad
       v22 =  wad11/detad
 c      
-      R8tmp1 = wd11*ra  + wd12*dec + wa11*ra2 + wa12*dec2
-      R8tmp2 = wd12*ra  + wd22*dec + wa12*ra2 + wa22*dec2
+      R8tmp1 = wa11*ra  + wa12*dec + wd11*ra2 + wd12*dec2
+      R8tmp2 = wa12*ra  + wa22*dec + wd12*ra2 + wd22*dec2
 c      
       ra  = v11*R8tmp1 + v12*R8tmp2
       dec = v12*R8tmp1 + v22*R8tmp2
@@ -711,7 +713,7 @@ c
       write (Line(IFA(3):IFB(7)), '(2F12.7,3F9.4)')
      +       ra, dec, sigra, sigdec, sigradec     
 c      
-c  EcLong  | EcLongSig|  EcLat   | EcLatSig|  dEcLong |dEcLongSig|  dEcLat  |dEcLatSig|dEcLongSNR| dEcLatSNR| chi2pmra|chi2pmdec|ka|k1|k2|km|m|
+c  EcLong  | EcLongSig|  EcLat   | EcLatSig|  dEcLong |dEcLongSig|  dEcLat |dEcLatSig|dEcLongSNR| dEcLatSNR| chi2pmra|chi2pmdec|ka|k1|k2|km|m|
 c1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
 c         1         2         3          4         5        6         7         8         9        10       11         12        13        14
       write (EclData,'(F10.6,F11.3,F11.6,F10.3,3F11.3,F10.3,2F11.3,2F10.3,4I3)') 
@@ -804,9 +806,9 @@ c
      +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
           end if
         end if
-        R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
-        write (Line(IFA(20):IFB(20)), '(F7.1)') R8tmp1
+        w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (w1snr .gt. 9999.0) w1snr = 9999.0
+        write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
         Line(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
       end if
@@ -829,9 +831,9 @@ c
      +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
           end if
         end if
-        R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
-        write (Line(IFA(21):IFB(21)), '(F7.1)') R8tmp1
+        w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (w2snr .gt. 9999.0) w2snr = 9999.0
+        write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
         Line(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
       end if
@@ -853,6 +855,9 @@ c
         write (Line(IFA(22):IFB(22)), '(1pe12.4)') w1flux
         w1sigflux = dsqrt(v1*v2/(v1+v2))
         write (Line(IFA(23):IFB(23)), '(1pe14.4)') w1sigflux
+        w1snr = w1flux/w1sigflux       ! recompute w1snr
+        if (w1snr .gt. 9999.0) w1snr = 9999.0
+        write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
         Line(IFA(22):IFB(23)) = Line(IFA(188):IFB(189))
       end if
@@ -874,6 +879,9 @@ c
         write (Line(IFA(24):IFB(24)), '(1pe12.4)') w2flux
         w2sigflux = dsqrt(v1*v2/(v1+v2))
         write (Line(IFA(25):IFB(25)), '(1pe14.4)') w2sigflux
+        w2snr = w2flux/w2sigflux       ! recompute w2snr
+        if (w2snr .gt. 9999.0) w2snr = 9999.0
+        write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
         Line(IFA(24):IFB(25)) = Line(IFA(190):IFB(191))
       end if
@@ -940,18 +948,26 @@ c
       k = 26
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1mpro
       dwmpro = R8tmp1 - R8tmp2
-c     wmpro = (v2*R8tmp1+v1*R8tmp2)/(v1+v2) ! refined w1mpro
-      wmpro = w1m0 - 2.5*dlog10(w1flux)
-      wsigmpro = CoefMag*w1sigflux/w1flux
+      if ((w1flux .gt. 0.0d0) .and. (w1snr .ge. 2.0d0)) then
+        wmpro    = w1m0 - 2.5*dlog10(w1flux)
+        wsigmpro = CoefMag/w1snr
+      else
+        if (w1flux .gt. 0.0d0) then
+          wmpro = w1m0 - 2.5*dlog10(w1flux+2.0d0*w1sigflux)
+        else
+          wmpro = w1m0 - 2.5*dlog10(2.0d0*w1sigflux)
+        end if
+        wsigmpro = 9.99
+      end if
       write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
-      k = wmpro + 1                         ! w1mpro hist cell
+      k = 27
+      write (Line(IFA(k):IFB(k)),'(F10.3)') wsigmpro
+c
+      k = R8tmp1 + 1                   ! w1mpro asce hist cell
       if (k .lt.  1) k = 1
       if (k .gt. 20) k = 20
       Nw1rchi2asce(k) = Nw1rchi2asce(k) + 1
       w1rchi2asce(Nw1rchi2asce(k),k) = wrchi2a
-c     R8tmp1 = dsqrt(v1*v2/(v1+v2))
-      k = 27
-      write (Line(IFA(k):IFB(k)),'(F10.3)') wsigmpro
       rchi2dwm = dwmpro**2/(v1+v2)
       if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
       write (dMagData(1:14),'(2F7.3)') dwmpro, rchi2dwm
@@ -1080,12 +1096,19 @@ c
       w2rchi2desc(Nw2rchi2desc(k),k) = wrchi2d
 c      
       dwmpro = R8tmp1 - R8tmp2
-c     wmpro = (v2*R8tmp1+v1*R8tmp2)/(v1+v2) ! refined w2mpro
-      wmpro = w2m0 - 2.5*dlog10(w2flux)
-      wsigmpro = CoefMag*w2sigflux/w2flux
+      if ((w2flux .gt. 0.0d0) .and. (w2snr .ge. 2.0d0)) then
+        wmpro    = w2m0 - 2.5*dlog10(w2flux)
+        wsigmpro = CoefMag/w2snr
+      else
+        if (w2flux .gt. 0.0d0) then
+          wmpro = w2m0 - 2.5*dlog10(w2flux+2.0d0*w2sigflux)
+        else
+          wmpro = w2m0 - 2.5*dlog10(2.0d0*w2sigflux)
+        end if
+        wsigmpro = 9.99
+      end if
       k = 29
       write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
-c     R8tmp1 = dsqrt(v1*v2/(v1+v2))
       k = 30
       write (Line(IFA(k):IFB(k)),'(F10.3)') wsigmpro
       rchi2dwm = dwmpro**2/(v1+v2)
@@ -1665,8 +1688,8 @@ c                                      ! Inverse of the weight sum matrix
       v12 = -wad12/detad
       v22 =  wad11/detad
 c      
-      R8tmp1 = wd11*ra  + wd12*dec + wa11*ra2 + wa12*dec2
-      R8tmp2 = wd12*ra  + wd22*dec + wa12*ra2 + wa22*dec2
+      R8tmp1 = wa11*ra  + wa12*dec + wd11*ra2 + wd12*dec2
+      R8tmp2 = wa12*ra  + wa22*dec + wd12*ra2 + wd22*dec2
 c      
       ra  = v11*R8tmp1 + v12*R8tmp2
       dec = v12*R8tmp1 + v22*R8tmp2
@@ -1782,9 +1805,9 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1snr_pn
         k = 150
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1snr_pm
-        R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
-        write (Line(IFA(k):IFB(k)), '(F9.1)') R8tmp1
+        w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (w1snr .gt. 9999.0) w1snr = 9999.0
+        write (Line(IFA(k):IFB(k)), '(F9.1)') w1snr
       else if (Good2) then
         Line(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
       end if
@@ -1796,9 +1819,9 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2snr_pn
         k = 151
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2snr_pm
-        R8tmp1 = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (R8tmp1 .gt. 9999.0) R8tmp1 = 9999.0
-        write (Line(IFA(k):IFB(k)), '(F9.1)') R8tmp1
+        w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+        if (w2snr .gt. 9999.0) w2snr = 9999.0
+        write (Line(IFA(k):IFB(k)), '(F9.1)') w2snr
       else if (Good2) then
         Line(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
       end if
@@ -1839,7 +1862,11 @@ c
         write (Line(IFA(k):IFB(k)), '(1pE12.4)') w1flux 
         w1sigflux  = dsqrt(v1*v2/(v1+v2))
         k = 153
-        write (Line(IFA(k):IFB(k)), '(1pE14.4)') w1sigflux 
+        write (Line(IFA(k):IFB(k)), '(1pE14.4)') w1sigflux
+        w1snr = w1flux/w1sigflux       ! recompute w1snr_pm
+        if (w1snr .gt. 9999.0) w1snr = 9999.0
+        k = 150        
+        write (Line(IFA(k):IFB(k)), '(f9.1)') w1snr
       else if (Good2) then
         Line(IFA(152):IFB(153)) = Line(IFA(318):IFB(319))
       end if
@@ -1862,6 +1889,10 @@ c
         w2sigflux  = dsqrt(v1*v2/(v1+v2))
         k = 155
         write (Line(IFA(k):IFB(k)), '(1pE14.4)') w2sigflux 
+        w2snr = w2flux/w2sigflux       ! recompute w2snr_pm
+        if (w2snr .gt. 9999.0) w2snr = 9999.0
+        k = 151        
+        write (Line(IFA(k):IFB(k)), '(f9.1)') w2snr
       else if (Good2) then
         Line(IFA(154):IFB(155)) = Line(IFA(320):IFB(321))
       end if
@@ -1869,25 +1900,21 @@ c
       Good1 = GoodCh1 .and. index(Line(IFA(156):IFB(158)),'null') .eq. 0  ! w1mpro_pm-w1rchi2_pm
       Good2 = GoodCh2 .and. index(Line(IFA(322):IFB(324)),'null') .eq. 0  ! w1mpro_pn-w1rchi2_pn
       if (Good1 .and. Good2) then
-c       k = 323
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1sigmpro_pn
-c       if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
-c       k = 157
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1sigmpro_pm
-c       if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
-c       v1 = R8tmp1**2
-c       v2 = R8tmp2**2
-c       k = 322
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1mpro_pn
+        if ((w1flux .gt. 0.0d0) .and. (w1snr .ge. 2.0d0)) then
+          wmpro    = w1m0 - 2.5*dlog10(w1flux)
+          wsigmpro = CoefMag/w1snr
+        else
+          if (w1flux .gt. 0.0d0) then
+            wmpro = w1m0 - 2.5*dlog10(w1flux+2.0d0*w1sigflux)
+          else
+            wmpro = w1m0 - 2.5*dlog10(2.0d0*w1sigflux)
+          end if
+          wsigmpro = 9.99
+        end if
         k = 156
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1mpro_pm
-c       R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-        wmpro = w1m0 - 2.5*dlog10(w1flux)
-        wsigmpro = CoefMag*w1sigflux/w1flux
-        write (Line(IFA(k):IFB(k)), '(F10.3)') wmpro
-c       R8tmp1 = dsqrt(v1*v2/(v1+v2))
+        write (Line(IFA(k):IFB(k)),'(F10.3)') wmpro
         k = 157
-        write (Line(IFA(k):IFB(k)), '(F13.3)') wsigmpro
+        write (Line(IFA(k):IFB(k)),'(F13.3)') wsigmpro      
         k = 324
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1rchi2_pn
         k = 158
@@ -1904,23 +1931,19 @@ c
       Good1 = GoodCh1 .and. index(Line(IFA(159):IFB(161)),'null') .eq. 0  ! w2mpro_pm-w2rchi2_pm
       Good2 = GoodCh2 .and. index(Line(IFA(325):IFB(327)),'null') .eq. 0  ! w2mpro_pn-w2rchi2_pn
       if (Good1 .and. Good2) then
-c       k = 326
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2sigmpro_pn
-c       if (R8tmp2 .lt. 0.001d0) R8tmp2 = 0.001d0
-c       k = 160
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2sigmpro_pm
-c       if (R8tmp1 .lt. 0.001d0) R8tmp1 = 0.001d0
-c       v1 = R8tmp1**2
-c       v2 = R8tmp2**2
-c       k = 325
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2mpro_pn
+        if ((w2flux .gt. 0.0d0) .and. (w2snr .ge. 2.0d0)) then
+          wmpro    = w2m0 - 2.5*dlog10(w2flux)
+          wsigmpro = CoefMag/w2snr
+        else
+          if (w2flux .gt. 0.0d0) then
+            wmpro = w2m0 - 2.5*dlog10(w2flux+2.0d0*w2sigflux)
+          else
+            wmpro = w2m0 - 2.5*dlog10(2.0d0*w2sigflux)
+          end if
+          wsigmpro = 9.99
+        end if
         k = 159
-c       read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2mpro_pm
-c       R8tmp1 = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-        wmpro = w2m0 - 2.5*dlog10(w2flux)
-        wsigmpro = CoefMag*w2sigflux/w2flux
         write (Line(IFA(k):IFB(k)), '(F10.3)') wmpro
-c       R8tmp1 = dsqrt(v1*v2/(v1+v2))
         k = 160
         write (Line(IFA(k):IFB(k)), '(F13.3)') wsigmpro
         k = 327
@@ -1959,10 +1982,10 @@ c
         dRA = 0.0d0
       end if
       ra = rastat + dRA
-	  if (ra .gt. 360.0d0) then
-		ra = ra - 360.0d0
-	  else if (ra .lt. 0.0d0) then
-		ra = 360.0d0 + ra
+       if (ra .gt. 360.0d0) then
+          ra = ra - 360.0d0
+       else if (ra .lt. 0.0d0) then
+          ra = 360.0d0 + ra
       end if
       k = 147
       Read(Line(IFA(k):IFB(k)), *, err = 1600) pmdec
