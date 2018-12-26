@@ -57,6 +57,9 @@ c          1.92 B81008: fixed NaNs from zero w?sigmpros
 c          1.93 B81108: removed above inverse-var magnitude averaging
 c          1.94 B81108: installed mag computation from avg fluxes
 c          1.95 B81124: installed mag upper limit logic
+c          1.96 B81215: installed fixes for }dec| > 90 and |dec_pm| > 90
+c          1.96 B81220: changed RA/Dec averaging to local Cartesian
+c                       coordinate frame including spherical effects
 c
 c-----------------------------------------------------------------------
 c
@@ -114,7 +117,7 @@ c
      +               sum2dw2MJD, PMRA, sigPMRA, PMDec, sigPMDec,
      +               Alpha1, sumDec1, sumDec2, w1flux, w1sigflux,
      +               w2flux, w2sigflux, w1m0, w2m0, CoefMag, wsigmpro,
-     +               w1snr, w2snr
+     +               w1snr, w2snr, X, Y, Z, X1, Y1, Z1
       Real*4, allocatable :: MedEclong(:), MedEcLat(:), MedRA(:),
      +               MedDec(:), w1rchi2asce(:,:), w2rchi2asce(:,:),
      +               w1rchi2desc(:,:), w2rchi2desc(:,:),
@@ -124,7 +127,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.95 B81124'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.96 B81220'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -644,19 +647,19 @@ c                                      ! Get averaged RA & Dec
       detd  = omd11*omd22 - omd12**2
 c
       GoodDeterm1 = deta .gt. 0.0d0    ! check for singular error covariance matrices
-      GoodDeterm2 = detd .gt. 0.0d0
-      if (.not.(GoodDeterm1.and.GoodDeterm2))
+      GoodDeterm2 = detd .gt. 0.0d0 
+      if (.not.(GoodDeterm1.and.GoodDeterm2))  ! bad A or D error covariance matrices
      +           nBadCovMat = nBadCovMat + 1
-      if (.not.GoodDeterm1) then
-        oma11 = sigra**2                 ! A & D error covariance matrices
+      if (.not.GoodDeterm1) then       ! fix A error covariance matrix
+        oma11 = sigra**2
         oma22 = sigdec**2
         deta  = oma11*oma22
         nBadCovMatA = nBadCovMatA + 1
         if (dbg) print *, 'Bad Asce covariance matrix on source'
      +                   //Line(IFA(1):IFB(1))
       end if
-      if (.not.GoodDeterm2) then
-        omd11 = sigra**2                 ! A & D error covariance matrices
+      if (.not.GoodDeterm2) then       ! fix D error covariance matrix
+        omd11 = sigra**2
         omd22 = sigdec**2
         detd  = omd11*omd22
         nBadCovMatD = nBadCovMatD + 1
@@ -679,13 +682,20 @@ c                                      ! Inverse of the weight sum matrix
       v11 =  wad22/detad
       v12 = -wad12/detad
       v22 =  wad11/detad
+c                                      ! Local Cartesian posn components
+      call GetTmat(ra,dec)
+      call RADec2XYZ(ra2,dec2, X,Y,Z)
 c      
-      R8tmp1 = wa11*ra  + wa12*dec + wd11*ra2 + wd12*dec2
-      R8tmp2 = wa12*ra  + wa22*dec + wd12*ra2 + wd22*dec2
-c      
-      ra  = v11*R8tmp1 + v12*R8tmp2
-      dec = v12*R8tmp1 + v22*R8tmp2
-      if (ra .lt. 0.0d0) ra = ra + 360.0d0
+      R8tmp1 = wd11*X + wd12*Y         ! (X,Y)_asce are zero, because we
+      R8tmp2 = wd12*X + wd22*Y         ! used the asce RA&Dec to create
+      X1 = v11*R8tmp1 + v12*R8tmp2     ! the Cartesian projection
+      Y1 = v12*R8tmp1 + v22*R8tmp2
+      Z1 = Dsqrt(1.0d0 - X1**2 - Y1**2)
+      call XYZ2RADec(X1,Y1,Z1, ra,dec)
+      if (dbg .and. nRow .le. 10) then
+        print *,' new X,Y,Z on nRow',nRow,':', X, Y, Z
+        print *,'ra/dec on nRow',nRow,':', ra, dec
+      end if
 c
       if (nAlPha1 .eq. 0) then
         nAlpha1   = 1
@@ -720,7 +730,7 @@ c         1         2         3          4         5        6         7         
      +       EcLong,  EcLongSig,  EcLat,  EcLatSig,
      +      dEcLong, dEcLongSig, dEcLat, dEcLatSig,
      +      dEcLongSNR, dEcLatSNR, chi2pmra, chi2pmdec,
-     +      KodeAst, KodePhot1, KodePhot2, KodePM   
+     +      KodeAst, KodePhot1, KodePhot2, KodePM
 c     
       Good1 = index(Line(IFA(164):IFB(165)),'null') .eq. 0
       Good2 = index(Line(IFA(330):IFB(331)),'null') .eq. 0
@@ -1656,7 +1666,7 @@ c
       if (.not.(GoodDeterm1.and.GoodDeterm2))
      +          nBadCovMatP = nBadCovMatP + 1
       if (.not.GoodDeterm1) then
-        oma11 = sigra**2                 ! A & D error covariance matrices
+        oma11 = sigra**2                 ! fix A error covariance matrix
         oma22 = sigdec**2
         deta  = oma11*oma22
         nBadCovMatPA = nBadCovMatPA + 1
@@ -1664,7 +1674,7 @@ c
      +                   //' on source'//Line(IFA(1):IFB(1))
       end if
       if (.not.GoodDeterm2) then
-        omd11 = sigra**2                 ! A & D error covariance matrices
+        omd11 = sigra**2                 ! fix D error covariance matrix
         omd22 = sigdec**2
         detd  = omd11*omd22
         nBadCovMatPD = nBadCovMatPD + 1
@@ -1687,13 +1697,16 @@ c                                      ! Inverse of the weight sum matrix
       v11 =  wad22/detad
       v12 = -wad12/detad
       v22 =  wad11/detad
+c
+      call GetTmat(ra,dec)
+      call RADec2XYZ(ra2,dec2, X,Y,Z)
 c      
-      R8tmp1 = wa11*ra  + wa12*dec + wd11*ra2 + wd12*dec2
-      R8tmp2 = wa12*ra  + wa22*dec + wd12*ra2 + wd22*dec2
-c      
-      ra  = v11*R8tmp1 + v12*R8tmp2
-      dec = v12*R8tmp1 + v22*R8tmp2
-      if (ra .lt. 0.0d0) ra = ra + 360.0d0
+      R8tmp1 = wd11*X + wd12*Y         ! (X,Y)_asce are zero, because we
+      R8tmp2 = wd12*X + wd22*Y         ! used the asce RA&Dec to create
+      X1 = v11*R8tmp1 + v12*R8tmp2     ! the Cartesian projection
+      Y1 = v12*R8tmp1 + v22*R8tmp2
+      Z1 = Dsqrt(1.0d0 - X1**2 - Y1**2)
+      call XYZ2RADec(X1,Y1,Z1, ra,dec)
 c     
       sigra    = dsqrt(v11)
       sigdec   = dsqrt(v22)
@@ -2453,9 +2466,17 @@ c
       real*8 RA, Dec, Long, Lat, SOb, Cob, X, Y, Z, d2r,
      +       cRA, cDec, sRA, sDec, X2, Y2
 c
-c   Obliquity(2015) in J2000: 23.43734105     
+c   Obliquity in J2000: 23.43927944 deg = 8.4381406d4 arcsec  
 c
-      data d2r/1.745329252d-2/, cOb, sOb/0.9174956d0, 0.39777459d0/
+      data d2r/1.745329252d-2/, cOb, sOb/0.917482143d0, 0.397776969d0/
+c
+c Ref: Celest Mech Dyn Astr (2011) 110:293–304
+c      DOI 10.1007/s10569-011-9352-4
+c      SPECIAL REPORT
+c      The IAU 2009 system of astronomical constants:
+c      the report of the IAU working group on numerical
+c      standards for Fundamental Astronomy
+c      https://link.springer.com/content/pdf/10.1007%2Fs10569-011-9352-4.pdf
 c
 c-----------------------------------------------------------------------
 c
@@ -2735,10 +2756,21 @@ c
 c
       real*8 RA, Dec, pa, SOb, Cob, d2r, r2d
 c
-c   Obliquity(2015) in J2000: 23.43734105     
+c   Obliquity in J2000: 23.43927944 deg = 8.4381406d4 arcsec 
+c 
+c   NOTE: sOb negative because rotation here is opposite to the
+c       other routines in this program
 c
-      data d2r/1.745329252d-2/, cOb, sOb/0.9174956, -0.39777459/,
-     +     r2d/57.29578/ 
+      data d2r/1.745329252d-2/, cOb, sOb/0.917482143d0, -0.397776969d0/,
+     +     r2d/57.29577951d0/ 
+c
+c Ref: Celest Mech Dyn Astr (2011) 110:293–304
+c      DOI 10.1007/s10569-011-9352-4
+c      SPECIAL REPORT
+c      The IAU 2009 system of astronomical constants:
+c      the report of the IAU working group on numerical
+c      standards for Fundamental Astronomy
+c      https://link.springer.com/content/pdf/10.1007%2Fs10569-011-9352-4.pdf
 c
 c-----------------------------------------------------------------------
 c
@@ -2807,6 +2839,79 @@ c
       Long = Long0 - atan2(cDec*sRA,cDec0*sDec - sDec0*cDec*cRA)/d2r
       
       if (Long .lt. 0.0) Long = Long + 360.0
+c
+      return
+      end
+c
+c=======================================================================
+c
+      subroutine GetTmat(RA, Dec)
+c
+      real*8 RA, Dec, ph1, ph2, c1, c2, s1, s2, d2r,
+     +       T11,T12,T13,T21,T22,T23,T31,T32,T33
+      common / Tmat / T11,T12,T13,T21,T22,T23,T31,T32,T33
+      data d2r/1.745329252d-2/
+c      
+      ph1 = d2r*(RA - 90.0d0)
+      ph2 = d2r*(Dec - 90.0d0)
+      c1  = dcos(ph1)
+      c2  = dcos(ph2)
+      s1  = dsin(ph1)
+      s2  = dsin(ph2)
+c
+      T11 =  c1
+      T12 =  s1
+c     T13 =  0.0d0             ! not used, would multiply by 0
+      T21 = -c2*s1
+      T22 =  c2*c1
+      T23 =  s2
+      T31 =  s2*s1
+      T32 = -s2*c1
+      T33 =  c2
+c
+      return
+      end
+c
+c=======================================================================
+c
+      subroutine RADec2XYZ(RA,Dec, X,Y,Z)
+c
+      real*8 RA, Dec, c1, X, Y, Z, X1, Y1, Z1, d2r,
+     +       T11,T12,T13,T21,T22,T23,T31,T32,T33
+      common / Tmat / T11,T12,T13,T21,T22,T23,T31,T32,T33
+      data d2r/1.745329252d-2/
+c
+      c1 = dcos(d2r*dec)
+      X1 = dcos(d2r*ra)*c1
+      Y1 = dsin(d2r*ra)*c1
+      Z1 = dsin(d2r*dec)
+c
+      X = T11*X1 + T12*Y1              ! + T13*Z1, but T13 = 0
+      Y = T21*X1 + T22*Y1 + T23*Z1
+      Z = T31*X1 + T32*Y1 + T33*Z1
+c
+      return
+      end
+c
+c=======================================================================
+c
+      subroutine XYZ2RADec(X,Y,Z, RA,Dec)
+c
+      real*8 RA, Dec,  X, Y, Z, X1, Y1, Z1, d2r,
+     +       T11,T12,T13,T21,T22,T23,T31,T32,T33
+      common / Tmat / T11,T12,T13,T21,T22,T23,T31,T32,T33
+      data d2r/1.745329252d-2/
+c
+      X1 = T11*X + T21*Y + T31*Z
+      Y1 = T12*X + T22*Y + T32*Z
+      Z1 =         T23*Y + T33*Z       ! +T13*X, but T13 = 0
+c
+      if (Z1 .gt.  1.0d0) Z1 =  1.0d0
+      if (Z1 .lt. -1.0d0) Z1 = -1.0d0
+c
+      ra = datan2(Y1,X1)/d2r
+      if (ra .lt. 0.0d0) ra = ra + 360.0d0
+      dec = dasin(Z1)/d2r
 c
       return
       end
