@@ -60,6 +60,7 @@ c          1.95 B81124: installed mag upper limit logic
 c          1.96 B81215: installed fixes for }dec| > 90 and |dec_pm| > 90
 c          1.96 B81220: changed RA/Dec averaging to local Cartesian
 c                       coordinate frame including spherical effects
+c          1.97 B90114: clip negative snr at -999.0
 c
 c-----------------------------------------------------------------------
 c
@@ -127,7 +128,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.96 B81220'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.97 B90114'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -818,6 +819,7 @@ c
         end if
         w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w1snr .gt. 9999.0) w1snr = 9999.0
+        if (w1snr .lt. -999.0) w1snr = -999.0
         write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
         Line(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
@@ -843,6 +845,7 @@ c
         end if
         w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w2snr .gt. 9999.0) w2snr = 9999.0
+        if (w2snr .lt. -999.0) w2snr = -999.0
         write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
         Line(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
@@ -867,6 +870,7 @@ c
         write (Line(IFA(23):IFB(23)), '(1pe14.4)') w1sigflux
         w1snr = w1flux/w1sigflux       ! recompute w1snr
         if (w1snr .gt. 9999.0) w1snr = 9999.0
+        if (w1snr .lt. -999.0) w1snr = -999.0
         write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
         Line(IFA(22):IFB(23)) = Line(IFA(188):IFB(189))
@@ -891,6 +895,7 @@ c
         write (Line(IFA(25):IFB(25)), '(1pe14.4)') w2sigflux
         w2snr = w2flux/w2sigflux       ! recompute w2snr
         if (w2snr .gt. 9999.0) w2snr = 9999.0
+        if (w2snr .lt. -999.0) w2snr = -999.0
         write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
         Line(IFA(24):IFB(25)) = Line(IFA(190):IFB(191))
@@ -1820,6 +1825,7 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1snr_pm
         w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w1snr .gt. 9999.0) w1snr = 9999.0
+        if (w1snr .lt. -999.0) w1snr = -999.0
         write (Line(IFA(k):IFB(k)), '(F9.1)') w1snr
       else if (Good2) then
         Line(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
@@ -1834,6 +1840,7 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2snr_pm
         w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w2snr .gt. 9999.0) w2snr = 9999.0
+        if (w2snr .lt. -999.0) w2snr = -999.0
         write (Line(IFA(k):IFB(k)), '(F9.1)') w2snr
       else if (Good2) then
         Line(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
@@ -1878,6 +1885,7 @@ c
         write (Line(IFA(k):IFB(k)), '(1pE14.4)') w1sigflux
         w1snr = w1flux/w1sigflux       ! recompute w1snr_pm
         if (w1snr .gt. 9999.0) w1snr = 9999.0
+        if (w1snr .lt. -999.0) w1snr = -999.0
         k = 150        
         write (Line(IFA(k):IFB(k)), '(f9.1)') w1snr
       else if (Good2) then
@@ -1904,6 +1912,7 @@ c
         write (Line(IFA(k):IFB(k)), '(1pE14.4)') w2sigflux 
         w2snr = w2flux/w2sigflux       ! recompute w2snr_pm
         if (w2snr .gt. 9999.0) w2snr = 9999.0
+        if (w2snr .lt. -999.0) w2snr = -999.0
         k = 151        
         write (Line(IFA(k):IFB(k)), '(f9.1)') w2snr
       else if (Good2) then
