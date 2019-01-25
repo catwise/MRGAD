@@ -61,13 +61,16 @@ c          1.96 B81215: installed fixes for }dec| > 90 and |dec_pm| > 90
 c          1.96 B81220: changed RA/Dec averaging to local Cartesian
 c                       coordinate frame including spherical effects
 c          1.97 B90114: clip negative snr at -999.0
+c          1.98 B90125: buffer input line unchanged, use to restore flux
+c                       values when k1/k2 < 3; add mrgad vsn & run
+c                       date-time header line
 c
 c-----------------------------------------------------------------------
 c
                      Integer*4  MaxFld
                      Parameter (MaxFld = 1000)
 c
-      Character*5000 Line
+      Character*5000 Line, OutLine
       Character*500  InFNam, OutFNam, InFNamA, InFNamD, HistNam, TJnam
       Character*141  EclData
       Character*145  ChiSqData
@@ -128,7 +131,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.97 B90114'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.98 B90125'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -460,6 +463,8 @@ c                                      ! Read and process table files
 c
 50    read (10, '(a)', end=3000) Line
       if (Line(1:1) .eq. '\') go to 50
+      write(20,'(a)') '\ mrgad vsn '//Vsn//' run on '
+     +                  //CDate//' at '//CTime
 c
       call GetFlds(Line,Field,IFa,IFb,NF)
       if (dbg) print *,'No. fields returned by GetFlds:', NF
@@ -505,6 +510,7 @@ c                                      ! Process each data line
       doTJw1 = .false.
       doTJw2 = .false.
       read (10, '(a)', end=3005) Line
+      OutLine = Line
       ParData = '    null       null       null       null   '
 c                                      ! Check astrometric parameters
       GoodCh1 = index(Line(IFA(32):IFB(32)),  'null') .eq. 0
@@ -520,10 +526,10 @@ c                                      ! Check astrometric parameters
           GoodCh2 = .not.GoodCh1
         else
           rchi2 = (rchi2a+rchi2d)/2.0d0         ! assume equal Ndf
-          write(Line(IFA(k):IFB(k)),'(1pE11.3)') rchi2
+          write(OutLine(IFA(k):IFB(k)),'(1pE11.3)') rchi2
         end if
       else if (GoodCh2) then
-        Line(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
+        OutLine(IFA(32):IFB(32)) = Line(IFA(198):IFB(198))
       end if
 c
       Good1 = GoodCh1 .and. index(Line(IFA(3):IFB(7)),    'null') .eq. 0
@@ -558,7 +564,7 @@ c
      +     'Bad ascending AND descending Astrometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
-      if (Good2) Line(IFA(3):IFB(7)) = Line(IFA(169):IFB(173))
+      if (Good2) OutLine(IFA(3):IFB(7)) = Line(IFA(169):IFB(173))
       go to 1200
 c   
 1040  KodeAst = 3                      ! Both good; read positions
@@ -721,7 +727,7 @@ c
       sigradec = dsqrt(dabs(v12))
       if (v12 .lt. 0.0d0) sigradec = -sigradec
 c
-      write (Line(IFA(3):IFB(7)), '(2F12.7,3F9.4)')
+      write (OutLine(IFA(3):IFB(7)), '(2F12.7,3F9.4)')
      +       ra, dec, sigra, sigdec, sigradec     
 c      
 c  EcLong  | EcLongSig|  EcLat   | EcLatSig|  dEcLong |dEcLongSig|  dEcLat |dEcLatSig|dEcLongSNR| dEcLatSNR| chi2pmra|chi2pmdec|ka|k1|k2|km|m|
@@ -739,13 +745,13 @@ c
         read (Line(IFA(164):IFB(164)), *, err = 1050) Itmp1 ! nIters_pm
         read (Line(IFA(330):IFB(330)), *, err = 1050) Itmp2 ! nIters_pn
         if (Itmp2 .gt. Itmp1)
-     +      Line(IFA(164):IFB(164)) = Line(IFA(330):IFB(330))
+     +      OutLine(IFA(164):IFB(164)) = Line(IFA(330):IFB(330))
         read (Line(IFA(165):IFB(165)), *, err = 1050) Itmp1 ! nSteps_pm
         read (Line(IFA(331):IFB(331)), *, err = 1050) Itmp2 ! nSteps_pn
         if (Itmp2 .gt. Itmp1)
-     +      Line(IFA(165):IFB(165)) = Line(IFA(331):IFB(331))
+     +      OutLine(IFA(165):IFB(165)) = Line(IFA(331):IFB(331))
       else if (Good2) then
-        Line(IFA(164):IFB(165)) = Line(IFA(330):IFB(331))
+        OutLine(IFA(164):IFB(165)) = Line(IFA(330):IFB(331))
       end if
       go to 1200
 1050  print *,
@@ -759,7 +765,7 @@ c                                      ! w1sky - w2conf
       Good2 = index(Line(IFA(178):IFB(183)),'null') .eq. 0 !       good or all null
 c
       if (Good1 .and. Good2) go to 1230
-      if (Good2) Line(IFA(12):IFB(17)) = Line(IFA(178):IFB(183))
+      if (Good2) OutLine(IFA(12):IFB(17)) = Line(IFA(178):IFB(183))
       go to 1240
 c
 1230  k = 178
@@ -767,37 +773,37 @@ c
       k = 12
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1sky
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F10.3)') R8tmp1
       k = 179
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1sigsl
       k = 13
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1sigsk
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
       k = 180
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1conf2
       k = 14
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w1conf
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
       k = 181
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2sky2
       k = 15
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2sky
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F10.3)') R8tmp1
       k = 182
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2sigsl
       k = 16
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2sigsk
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
       k = 183
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2conf2
       k = 17
       Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1   ! w2conf
       R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-      write (Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
 c
 1240  Good1 = index(Line(IFA(20):IFB(20)),  'null') .eq. 0
       Good2 = index(Line(IFA(186):IFB(186)),'null') .eq. 0
@@ -820,9 +826,9 @@ c
         w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w1snr .gt. 9999.0) w1snr = 9999.0
         if (w1snr .lt. -999.0) w1snr = -999.0
-        write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
+        write (OutLine(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
-        Line(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
+        OutLine(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
       end if
 c
       Good1 = index(Line(IFA(21):IFB(21)),  'null') .eq. 0
@@ -846,9 +852,9 @@ c
         w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w2snr .gt. 9999.0) w2snr = 9999.0
         if (w2snr .lt. -999.0) w2snr = -999.0
-        write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
+        write (OutLine(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
-        Line(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
+        OutLine(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
       end if
 c
       Good1 = index(Line(IFA(22):IFB(23)),  'null') .eq. 0
@@ -865,15 +871,15 @@ c
         k = 188
         Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w1flux2
         w1flux = (v2*R8tmp1 + v1*R8tmp2)/(v1+v2)
-        write (Line(IFA(22):IFB(22)), '(1pe12.4)') w1flux
+        write (OutLine(IFA(22):IFB(22)), '(1pe12.4)') w1flux
         w1sigflux = dsqrt(v1*v2/(v1+v2))
-        write (Line(IFA(23):IFB(23)), '(1pe14.4)') w1sigflux
+        write (OutLine(IFA(23):IFB(23)), '(1pe14.4)') w1sigflux
         w1snr = w1flux/w1sigflux       ! recompute w1snr
         if (w1snr .gt. 9999.0) w1snr = 9999.0
         if (w1snr .lt. -999.0) w1snr = -999.0
-        write (Line(IFA(20):IFB(20)), '(F7.1)') w1snr
+        write (OutLine(IFA(20):IFB(20)), '(F7.1)') w1snr
       else if (Good2) then
-        Line(IFA(22):IFB(23)) = Line(IFA(188):IFB(189))
+        OutLine(IFA(22):IFB(23)) = Line(IFA(188):IFB(189))
       end if
 c
       Good1 = index(Line(IFA(24):IFB(25)),  'null') .eq. 0
@@ -890,15 +896,15 @@ c
         k = 190
         Read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2   ! w2flux2
         w2flux = (v2*R8tmp1 + v1*R8tmp2)/(v1+v2)
-        write (Line(IFA(24):IFB(24)), '(1pe12.4)') w2flux
+        write (OutLine(IFA(24):IFB(24)), '(1pe12.4)') w2flux
         w2sigflux = dsqrt(v1*v2/(v1+v2))
-        write (Line(IFA(25):IFB(25)), '(1pe14.4)') w2sigflux
+        write (OutLine(IFA(25):IFB(25)), '(1pe14.4)') w2sigflux
         w2snr = w2flux/w2sigflux       ! recompute w2snr
         if (w2snr .gt. 9999.0) w2snr = 9999.0
         if (w2snr .lt. -999.0) w2snr = -999.0
-        write (Line(IFA(21):IFB(21)), '(F7.1)') w2snr
+        write (OutLine(IFA(21):IFB(21)), '(F7.1)') w2snr
       else if (Good2) then
-        Line(IFA(24):IFB(25)) = Line(IFA(190):IFB(191))
+        OutLine(IFA(24):IFB(25)) = Line(IFA(190):IFB(191))
       end if
 c
 c                                      ! WPRO Photometry
@@ -928,24 +934,28 @@ c
       If (Good2) then
         nBadW1Phot1 = nBadW1Phot1 + 1
         KodePhot1 = 2
-        if (dbg) print *,'Bad  ascending W1 Photrometry on source'
+        if (dbg) print *,'Bad  ascending W1 Photometry on source'
      +                //Line(IFA(1):IFB(1))
       else If (Good1) then
         nBadW1Phot2 = nBadW1Phot2 + 1
         KodePhot1 = 1
-        if (dbg) print *,'Bad descending W1 Photrometry on source'
+        if (dbg) print *,'Bad descending W1 Photometry on source'
      +                //Line(IFA(1):IFB(1))
+        OutLine(IFa(20):IFb(20)) = Line(IFa(20):IFb(20))  ! restore Asce flux
+        OutLine(IFa(22):IFb(23)) = Line(IFa(22):IFb(23))        
       else
         nBadW1Phot1 = nBadW1Phot1 + 1
         nBadW1Phot2 = nBadW1Phot2 + 1
         KodePhot1 = 0     
         if (dbg) print *,
-     +     'Bad ascending AND descending W1 Photrometry on source'
+     +     'Bad ascending AND descending W1 Photometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
-        Line(IFA(26):IFB(28)) = Line(IFA(192):IFB(194))
-        Line(IFA(98):IFB(99)) = Line(IFA(264):IFB(265))
+        OutLine(IFA(20):IFB(20)) = Line(IFA(186):IFB(186)) ! w1snr
+        OutLine(IFA(22):IFB(23)) = Line(IFA(188):IFB(189)) ! w1flux & sig
+        OutLine(IFA(26):IFB(28)) = Line(IFA(192):IFB(194)) ! w1mpro &c.
+        OutLine(IFA(98):IFB(99)) = Line(IFA(264):IFB(265)) ! w1NM & w1M
       end if
       go to 1260
 c
@@ -974,9 +984,9 @@ c
         end if
         wsigmpro = 9.99
       end if
-      write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
+      write (OutLine(IFA(k):IFB(k)),'(F7.3)') wmpro
       k = 27
-      write (Line(IFA(k):IFB(k)),'(F10.3)') wsigmpro
+      write (OutLine(IFA(k):IFB(k)),'(F10.3)') wsigmpro
 c
       k = R8tmp1 + 1                   ! w1mpro asce hist cell
       if (k .lt.  1) k = 1
@@ -1023,7 +1033,7 @@ c
         wrchi2a = (dfloat(w1M)*wrchi2a + dfloat(w1M2)*wrchi2d)
      +          /  dfloat(w1M+w1M2)
         k = 28
-        write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
+        write (OutLine(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
         k = wmpro + 1
         if (k .lt.  1) k = 1
         if (k .gt. 20) k = 20
@@ -1031,13 +1041,13 @@ c
         w1rchi2mrg(Nw1rchi2mrg(k),k) = wrchi2a
       end if                           ! else leave "null"
       k = 99
-      write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
+      write (OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
       k = 264
       Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2    ! w1NM2
       k = 98
       Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1    ! w1NM
       Itmp1 = Itmp1 + Itmp2
-      write (Line(IFA(k):IFB(k)),'(I7)') Itmp1
+      write (OutLine(IFA(k):IFB(k)),'(I7)') Itmp1
 
 1260  GoodCh1 = index(Line(IFA(31):IFB(31)),  'null') .eq. 0  ! w2rchi2
       GoodCh2 = index(Line(IFA(197):IFB(197)),'null') .eq. 0  ! w2rchi22
@@ -1064,24 +1074,28 @@ c
       If (Good2) then
         nBadW2Phot1 = nBadW2Phot1 + 1
         KodePhot2 = 2
-        if (dbg) print *,'Bad  ascending W2 Photrometry on source'
+        if (dbg) print *,'Bad  ascending W2 Photometry on source'
      +                //Line(IFA(1):IFB(1))
       else If (Good1) then
         nBadW2Phot2 = nBadW2Phot2 + 1
         KodePhot2 = 1
-        if (dbg) print *,'Bad descending W2 Photrometry on source'
+        if (dbg) print *,'Bad descending W2 Photometry on source'
      +                //Line(IFA(1):IFB(1))
+        OutLine(IFa(21):IFb(21)) = Line(IFa(21):IFb(21))  ! restore Asce flux
+        OutLine(IFa(24):IFb(25)) = Line(IFa(24):IFb(25))        
       else
         nBadW2Phot1 = nBadW2Phot1 + 1
         nBadW2Phot2 = nBadW2Phot2 + 1
         KodePhot2 = 0     
         if (dbg) print *,
-     +     'Bad ascending AND descending W2 Photrometry on source'
+     +     'Bad ascending AND descending W2 Photometry on source'
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
-        Line(IFA(29):IFB(31))   = Line(IFA(195):IFB(197))
-        Line(IFA(109):IFB(110)) = Line(IFA(275):IFB(276))
+        OutLine(IFA(21):IFB(21))   = Line(IFA(187):IFB(187)) ! w2snr
+        OutLine(IFA(24):IFB(25))   = Line(IFA(190):IFB(191)) ! w2flux & sig
+        OutLine(IFA(29):IFB(31))   = Line(IFA(195):IFB(197)) ! w2mpro &c.
+        OutLine(IFA(109):IFB(110)) = Line(IFA(275):IFB(276)) ! w2NM & w1M
       end if
       go to 1280
 c
@@ -1123,9 +1137,9 @@ c
         wsigmpro = 9.99
       end if
       k = 29
-      write (Line(IFA(k):IFB(k)),'(F7.3)') wmpro
+      write (OutLine(IFA(k):IFB(k)),'(F7.3)') wmpro
       k = 30
-      write (Line(IFA(k):IFB(k)),'(F10.3)') wsigmpro
+      write (OutLine(IFA(k):IFB(k)),'(F10.3)') wsigmpro
       rchi2dwm = dwmpro**2/(v1+v2)
       if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
       write (dMagData(15:28),'(2F7.3)') dwmpro, rchi2dwm
@@ -1151,7 +1165,7 @@ c
         wrchi2a = (dfloat(w2M)*wrchi2a + dfloat(w2M2)*wrchi2d)
      +          /  dfloat(Itmp1)
         k = 31
-        write (Line(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
+        write (OutLine(IFA(k):IFB(k)),'(1pe11.3)') wrchi2a
         k = wmpro + 1
         if (k .lt.  1) k = 1
         if (k .gt. 20) k = 20
@@ -1159,13 +1173,13 @@ c
         w2rchi2mrg(Nw2rchi2mrg(k),k) = wrchi2a
       end if                           ! else leave "null"
       k = 110
-      write (Line(IFA(k):IFB(k)),'(I6)') Itmp1
+      write (OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
       k = 275
       Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2    ! w2NM2
       k = 109
       Read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1    ! w2NM
       Itmp1 = Itmp1 + Itmp2
-      write (Line(IFA(k):IFB(k)),'(I7)') Itmp1
+      write (OutLine(IFA(k):IFB(k)),'(I7)') Itmp1
 c                                      ! update EclData for KodePhot
 1280  write (EclData(132:133),'(I2)') KodePhot1
       write (EclData(135:136),'(I2)') KodePhot2
@@ -1182,9 +1196,9 @@ c
         k = 33
         read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! nb
         if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
-        write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I4)') Itmp1
       else if (Good2) then
-        Line(IFA(33):IFB(33)) = Line(IFA(199):IFB(199))
+        OutLine(IFA(33):IFB(33)) = Line(IFA(199):IFB(199))
       end if
 c
       Good1 = index(Line(IFA(34):IFB(34)),  'null') .eq. 0
@@ -1195,9 +1209,9 @@ c
         k = 34
         read (Line(IFA(k):IFB(k)), *, err = 3006) Itmp1 ! na
         if (Itmp2 .gt. Itmp1) Itmp1 = Itmp2
-        write(Line(IFA(k):IFB(k)),'(I4)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I4)') Itmp1
       else if (Good2) then
-        Line(IFA(34):IFB(34)) = Line(IFA(200):IFB(200))
+        OutLine(IFA(34):IFB(34)) = Line(IFA(200):IFB(200))
       end if
 c
       Good1 = index(Line(IFA(40):IFB(44)),'null')   .eq. 0 ! w1mag-w1mcor
@@ -1213,29 +1227,29 @@ c
         k = 40
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mag
         R8tmp1 = (R8tmp1+R8tmp2)/2.0
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') R8tmp1
         k = 41
-        write(Line(IFA(k):IFB(k)),'(F7.3)') v1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') v1
         k = 208
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2  !  w1flh
         k = 42
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1  !  w1flg
         Itmp1 = IOR(Itmp1,Itmp2)
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
         k = 209
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1Cov2
         k = 43
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1Cov
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
         k = 210
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mcos
         k = 44
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mcor
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') R8tmp1
       else if (Good2) then
-        Line(IFA(40):IFB(44)) = Line(IFA(206):IFB(210))
+        OutLine(IFA(40):IFB(44)) = Line(IFA(206):IFB(210))
       end if
 c
       Good1 = index(Line(IFA(45):IFB(49)),'null')   .eq. 0 ! w2mag-w2mcor
@@ -1251,29 +1265,29 @@ c
         k = 45
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mag
         R8tmp1 = (R8tmp1+R8tmp2)/2.0
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') R8tmp1
         k = 46
-        write(Line(IFA(k):IFB(k)),'(F7.3)') v1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') v1
         k = 213
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2  !  w2flh
         k = 47
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1  !  w2flg
         Itmp1 = IOR(Itmp1,Itmp2)
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
         k = 214
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2Cov2
         k = 48
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2Cov
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
         k = 215
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mcos
         k = 49
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mcor
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write(Line(IFA(k):IFB(k)),'(F7.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F7.3)') R8tmp1
       else if (Good2) then
-        Line(IFA(45):IFB(49)) = Line(IFA(211):IFB(215))
+        OutLine(IFA(45):IFB(49)) = Line(IFA(211):IFB(215))
       end if
 c      
       do 1400 n = 1, 16                ! 8 mag sets for 2 bands each
@@ -1292,17 +1306,17 @@ c
           k = k1
           read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w?mag_?
           R8tmp1 = (R8tmp1+R8tmp2)/2.0
-          write(Line(IFA(k):IFB(k)),'(F10.3)') R8tmp1
+          write(OutLine(IFA(k):IFB(k)),'(F10.3)') R8tmp1
            k = k1 + 1
-          write(Line(IFA(k):IFB(k)),'(F10.3)') v1
+          write(OutLine(IFA(k):IFB(k)),'(F10.3)') v1
           k = k1 + 2
           read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1  !  w?flg_?
           k = k2 + 2
           read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp2  !  w?flg_?2
           Itmp1 = IOR(Itmp1,Itmp2)
-          write(Line(IFA(k):IFB(k)),'(I8)') Itmp1
+          write(OutLine(IFA(k):IFB(k)),'(I8)') Itmp1
         else if (Good2) then
-          Line(IFA(k1):IFB(k1+2)) = Line(IFA(k2):IFB(k2+2))
+          OutLine(IFA(k1):IFB(k1+2)) = Line(IFA(k2):IFB(k2+2))
         end if
 1400  continue
 c
@@ -1319,17 +1333,17 @@ c
         k = 100
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1magP
         R8tmp1 = (R8tmp1+R8tmp2)/2.0
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
         k = 102
-        write(Line(IFA(k):IFB(k)),'(F8.3)') v1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') v1
         k = 267
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1sigP3
         k = 101
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1sigP1
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
       else if (Good2) then
-        Line(IFA(100):IFB(102)) = Line(IFA(266):IFB(268))
+        OutLine(IFA(100):IFB(102)) = Line(IFA(266):IFB(268))
       end if
 c
       Good1 = index(Line(IFA(111):IFB(113)),'null') .eq. 0 ! w2magP-w2sigP2
@@ -1345,17 +1359,17 @@ c
         k = 111
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2magP
         R8tmp1 = (R8tmp1+R8tmp2)/2.0
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
         k = 113
-        write(Line(IFA(k):IFB(k)),'(F8.3)') v1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') v1
         k = 278
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2sigP3
         k = 112
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2sigP1
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F8.3)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F8.3)') R8tmp1
       else if (Good2) then
-        Line(IFA(111):IFB(113)) = Line(IFA(277):IFB(279))
+        OutLine(IFA(111):IFB(113)) = Line(IFA(277):IFB(279))
       end if
 c
       Good1 = index(Line(IFA(103):IFB(103)),'null') .eq. 0 ! w1k
@@ -1366,9 +1380,9 @@ c
         k = 103
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1k
         if (R8tmp2 .gt. R8tmp1)
-     +      Line(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
+     +      OutLine(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
       else if (Good2) then
-        Line(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
+        OutLine(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
       end if
 c
       Good1 = index(Line(IFA(114):IFB(114)),'null') .eq. 0 ! w2k
@@ -1379,9 +1393,9 @@ c
         k = 114
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2k
         if (R8tmp2 .gt. R8tmp1)
-     +      Line(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
+     +      OutLine(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
       else if (Good2) then
-        Line(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
+        OutLine(IFA(103):IFB(103)) = Line(IFA(269):IFB(269))
       end if
 c
       Good1 = index(Line(IFA(104):IFB(104)),'null') .eq. 0 ! w1Ndf
@@ -1394,9 +1408,9 @@ c
         k = 104
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1   !  w1Ndf
         Itmp1 = Itmp1+Itmp2
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
       else if (Good2) then
-        Line(IFA(104):IFB(104)) = Line(IFA(270):IFB(270))
+        OutLine(IFA(104):IFB(104)) = Line(IFA(270):IFB(270))
       end if
 c
       Good1 = index(Line(IFA(115):IFB(115)),'null') .eq. 0 ! w2Ndf
@@ -1409,9 +1423,9 @@ c
         k = 115
         read(Line(IFA(k):IFB(k)), *, err = 3006) Itmp1   !  w2Ndf
         Itmp1 = Itmp1+Itmp2
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
       else if (Good2) then
-        Line(IFA(115):IFB(115)) = Line(IFA(281):IFB(281))
+        OutLine(IFA(115):IFB(115)) = Line(IFA(281):IFB(281))
       end if
 c
       Good1 = index(Line(IFA(105):IFB(105)),'null') .eq. 0 ! w1mLQ
@@ -1422,9 +1436,9 @@ c
         k = 105
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mLQ
         if (R8tmp2 .gt. R8tmp1) 
-     +      Line(IFA(105):IFB(105)) = Line(IFA(271):IFB(271))
+     +      OutLine(IFA(105):IFB(105)) = Line(IFA(271):IFB(271))
       else if (Good2) then
-        Line(IFA(105):IFB(105)) = Line(IFA(271):IFB(271))
+        OutLine(IFA(105):IFB(105)) = Line(IFA(271):IFB(271))
       end if
 c
       Good1 = index(Line(IFA(116):IFB(116)),'null') .eq. 0 ! w2mLQ
@@ -1435,9 +1449,9 @@ c
         k = 116
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mLQ
         if (R8tmp2 .gt. R8tmp1) 
-     +      Line(IFA(116):IFB(116)) = Line(IFA(282):IFB(282))
+     +      OutLine(IFA(116):IFB(116)) = Line(IFA(282):IFB(282))
       else if (Good2) then
-        Line(IFA(116):IFB(116)) = Line(IFA(282):IFB(282))
+        OutLine(IFA(116):IFB(116)) = Line(IFA(282):IFB(282))
       end if
 c
       Good1 = index(Line(IFA(120):IFB(121)),'null') .eq. 0 ! rho12-q12
@@ -1448,15 +1462,15 @@ c
         k = 120
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  rho12
         Itmp1 = NInt((R8tmp1+R8tmp2)/2.0d0)
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
         k = 287
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  q122
         k = 121
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  q12
         Itmp1 = NInt((R8tmp1+R8tmp2)/2.0d0)
-        write(Line(IFA(k):IFB(k)),'(I6)') Itmp1
+        write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
       else if (Good2) then
-        Line(IFA(120):IFB(121)) = Line(IFA(286):IFB(287))
+        OutLine(IFA(120):IFB(121)) = Line(IFA(286):IFB(287))
       end if
 c
       dw1MJD = -9.9d9
@@ -1469,24 +1483,24 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmean
         dw1MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F18.8)') R8tmp1
         k = 272
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmin2
         k = 106
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmin
         if (R8tmp2 .lt. R8tmp1) then
-          Line(IFA(106):IFB(106)) = Line(IFA(272):IFB(272))
+          OutLine(IFA(106):IFB(106)) = Line(IFA(272):IFB(272))
         end if
         k = 273
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1mJDmax2
         k = 107
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w1mJDmax
         if (R8tmp2 .gt. R8tmp1) then
-          Line(IFA(107):IFB(107)) = Line(IFA(273):IFB(273))
+          OutLine(IFA(107):IFB(107)) = Line(IFA(273):IFB(273))
         end if
         k = 108
       else if (Good2) then
-        Line(IFA(106):IFB(108)) = Line(IFA(272):IFB(274))
+        OutLine(IFA(106):IFB(108)) = Line(IFA(272):IFB(274))
       end if
 c
       dw2MJD = -9.9d9
@@ -1499,24 +1513,24 @@ c
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmean
         dw2MJD = r8tmp1 - r8tmp2                         !  Asce-Dsec for PM later
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0        
-        write(Line(IFA(k):IFB(k)),'(F18.8)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F18.8)') R8tmp1
         k = 283
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmin2
         k = 117
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmin
         if (R8tmp2 .lt. R8tmp1) then
-          Line(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
+          OutLine(IFA(117):IFB(117)) = Line(IFA(283):IFB(283))
         end if      
         k = 284
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2mJDmax2
         k = 118
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  !  w2mJDmax
         if (R8tmp2 .gt. R8tmp1) then
-          Line(IFA(118):IFB(118)) = Line(IFA(284):IFB(284))
+          OutLine(IFA(118):IFB(118)) = Line(IFA(284):IFB(284))
         end if
         k = 119
       else if (Good2) then
-        Line(IFA(117):IFB(119)) = Line(IFA(283):IFB(285))
+        OutLine(IFA(117):IFB(119)) = Line(IFA(283):IFB(285))
       end if
 c      
       Good1 = index(Line(IFA(137):IFB(137)),'null') .eq. 0 ! mdetID
@@ -1561,10 +1575,10 @@ c
         if (w1M+w2M+w2M2+w2M2 .gt. 0) then
           R8tmp1 = (dfloat(w1M+w2M)*R8tmp1 + dfloat(w1M2+w2M2)*R8tmp2)
      +           /  dfloat(w1M+w2M+w2M2+w2M2)
-          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+          write (OutLine(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
         end if                         ! else leave "null"
       else if (GoodCh2) then
-        Line(IFA(162):IFB(162)) = Line(IFA(328):IFB(328))
+        OutLine(IFA(162):IFB(162)) = Line(IFA(328):IFB(328))
       end if
 
       Good1 = GoodCh1 .and. index(Line(IFA(140):IFB(149)),'null') .eq. 0
@@ -1590,7 +1604,7 @@ c
      +                //Line(IFA(1):IFB(1))
       end if
       if (Good2) then
-        Line(IFA(140):IFB(149))   = Line(IFA(306):IFB(315))
+        OutLine(IFA(140):IFB(149))   = Line(IFA(306):IFB(315))
       end if
       EclData(108:128) = '    null      null   '
       go to 1512
@@ -1604,7 +1618,7 @@ c
       sumMJD   = sumMJD   + R8tmp1
       sumMJDsq = sumMJDsq + R8tmp1**2
       nMJD     = nMJD + 1
-      write (Line(IFA(k):IFB(k)),'(F13.6)') R8tmp1
+      write (OutLine(IFA(k):IFB(k)),'(F13.6)') R8tmp1
 c                                      ! NOTE: using stationary-solution position
 c                                      !       variables for motion-solution 
 c                                      !       positions; code cloned from above
@@ -1718,7 +1732,7 @@ c
       sigradec = dsqrt(dabs(v12))
       if (v12 .lt. 0.0d0) sigradec = -sigradec
 c
-      write (Line(IFA(141):IFB(145)), '(2F12.7,F9.4,F10.4,F12.4)')
+      write (OutLine(IFA(141):IFB(145)), '(2F12.7,F9.4,F10.4,F12.4)')
      +       ra, dec, sigra, sigdec, sigradec
 c                                      ! NOTE: using stationary-solution position
 c                                      !       variables for motion-solution 
@@ -1754,12 +1768,12 @@ c
       k = 146
       if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
      + then
-        write(Line(IFA(k):IFB(k)),'(F10.4)')   R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F10.4)')   R8tmp1
       else
-        write(Line(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
       end if
       k = 148
-      write(Line(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
+      write(OutLine(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
       v1 = sigdec**2
       v2 = sigdec2**2
@@ -1770,12 +1784,12 @@ c
       k = 147
       if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
      + then
-        write(Line(IFA(k):IFB(k)),'(F10.4)')   R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(F10.4)')   R8tmp1
       else
-        write(Line(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
+        write(OutLine(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
       end if
       k = 149
-      write(Line(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
+      write(OutLine(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
 1512  Good1 = GoodCh1 .and. index(Line(IFA(163):IFB(163)),'null') .eq. 0  ! pmcode
       Good2 = GoodCh2 .and. index(Line(IFA(329):IFB(329)),'null') .eq. 0  ! pmcodf
@@ -1789,9 +1803,9 @@ c1234567
         if (Itmp2 .gt. Itmp1) ChTmp1(3:3) = ChTmp2(3:3)
         if (ChTmp2(4:4) .eq. 'Y') ChTmp1(4:4) = ChTmp2(4:4)
         if (ChTmp2(5:7) .gt. ChTmp1(5:7)) ChTmp1(5:7) = ChTmp2(5:7)
-        Line(IFA(163):IFB(163)) = ChTmp1
+        OutLine(IFA(163):IFB(163)) = ChTmp1
       else if (Good2) then
-        Line(IFA(163):IFB(163)) = Line(IFA(329):IFB(329))
+        OutLine(IFA(163):IFB(163)) = Line(IFA(329):IFB(329))
       end if
       go to 1530
 1520  print *,'ERROR reading pmcode or pmcodf on source',
@@ -1803,13 +1817,13 @@ c
         read (Line(IFA(164):IFB(164)), *, err = 1540) Itmp1 ! nIters_pm
         read (Line(IFA(330):IFB(330)), *, err = 1540) Itmp1 ! nIters_pn
         if (Itmp2 .gt. Itmp1)
-     +      Line(IFA(164):IFB(164)) = Line(IFA(330):IFB(330))
+     +      OutLine(IFA(164):IFB(164)) = Line(IFA(330):IFB(330))
         read (Line(IFA(165):IFB(165)), *, err = 1540) Itmp1 ! nSteps_pm
         read (Line(IFA(331):IFB(331)), *, err = 1540) Itmp1 ! nSteps_pn
         if (Itmp2 .gt. Itmp1)
-     +      Line(IFA(165):IFB(165)) = Line(IFA(331):IFB(331))
+     +      OutLine(IFA(165):IFB(165)) = Line(IFA(331):IFB(331))
       else if (Good2) then
-        Line(IFA(164):IFB(165)) = Line(IFA(330):IFB(331))
+        OutLine(IFA(164):IFB(165)) = Line(IFA(330):IFB(331))
       end if
       go to 1550
 1540  print *,
@@ -1826,9 +1840,9 @@ c
         w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w1snr .gt. 9999.0) w1snr = 9999.0
         if (w1snr .lt. -999.0) w1snr = -999.0
-        write (Line(IFA(k):IFB(k)), '(F9.1)') w1snr
+        write (OutLine(IFA(k):IFB(k)), '(F9.1)') w1snr
       else if (Good2) then
-        Line(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
+        OutLine(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(151):IFB(151)),'null') .eq. 0  ! w2snr_pm
@@ -1841,9 +1855,9 @@ c
         w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
         if (w2snr .gt. 9999.0) w2snr = 9999.0
         if (w2snr .lt. -999.0) w2snr = -999.0
-        write (Line(IFA(k):IFB(k)), '(F9.1)') w2snr
+        write (OutLine(IFA(k):IFB(k)), '(F9.1)') w2snr
       else if (Good2) then
-        Line(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
+        OutLine(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(138):IFB(139)),'null') .eq. 0  ! p1-p2
@@ -1854,15 +1868,15 @@ c
         k = 138
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! p1
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write (Line(IFA(k):IFB(k)), '(F10.5)') R8tmp1
+        write (OutLine(IFA(k):IFB(k)), '(F10.5)') R8tmp1
         k = 305
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! p22
         k = 139
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! p2
         R8tmp1 = (R8tmp1+R8tmp2)/2.0d0
-        write (Line(IFA(k):IFB(k)), '(F10.5)') R8tmp1
+        write (OutLine(IFA(k):IFB(k)), '(F10.5)') R8tmp1
       else if (Good2) then
-        Line(IFA(138):IFB(139)) = Line(IFA(304):IFB(305))
+        OutLine(IFA(138):IFB(139)) = Line(IFA(304):IFB(305))
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(152):IFB(153)),'null') .eq. 0  ! w1flux_pm-w1sigflux_pm
@@ -1879,17 +1893,17 @@ c
         k = 152
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1flux_pm
         w1flux  = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-        write (Line(IFA(k):IFB(k)), '(1pE12.4)') w1flux 
+        write (OutLine(IFA(k):IFB(k)), '(1pE12.4)') w1flux 
         w1sigflux  = dsqrt(v1*v2/(v1+v2))
         k = 153
-        write (Line(IFA(k):IFB(k)), '(1pE14.4)') w1sigflux
+        write (OutLine(IFA(k):IFB(k)), '(1pE14.4)') w1sigflux
         w1snr = w1flux/w1sigflux       ! recompute w1snr_pm
         if (w1snr .gt. 9999.0) w1snr = 9999.0
         if (w1snr .lt. -999.0) w1snr = -999.0
         k = 150        
-        write (Line(IFA(k):IFB(k)), '(f9.1)') w1snr
+        write (OutLine(IFA(k):IFB(k)), '(f9.1)') w1snr
       else if (Good2) then
-        Line(IFA(152):IFB(153)) = Line(IFA(318):IFB(319))
+        OutLine(IFA(152):IFB(153)) = Line(IFA(318):IFB(319))
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(154):IFB(155)),'null') .eq. 0  ! w2flux_pm-w2sigflux_pm
@@ -1906,17 +1920,17 @@ c
         k = 154
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2flux_pm
         w2flux  = (v2*R8tmp1+v1*R8tmp2)/(v1+v2)
-        write (Line(IFA(k):IFB(k)), '(1pE12.4)') w2flux 
+        write (OutLine(IFA(k):IFB(k)), '(1pE12.4)') w2flux 
         w2sigflux  = dsqrt(v1*v2/(v1+v2))
         k = 155
-        write (Line(IFA(k):IFB(k)), '(1pE14.4)') w2sigflux 
+        write (OutLine(IFA(k):IFB(k)), '(1pE14.4)') w2sigflux 
         w2snr = w2flux/w2sigflux       ! recompute w2snr_pm
         if (w2snr .gt. 9999.0) w2snr = 9999.0
         if (w2snr .lt. -999.0) w2snr = -999.0
         k = 151        
-        write (Line(IFA(k):IFB(k)), '(f9.1)') w2snr
+        write (OutLine(IFA(k):IFB(k)), '(f9.1)') w2snr
       else if (Good2) then
-        Line(IFA(154):IFB(155)) = Line(IFA(320):IFB(321))
+        OutLine(IFA(154):IFB(155)) = Line(IFA(320):IFB(321))
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(156):IFB(158)),'null') .eq. 0  ! w1mpro_pm-w1rchi2_pm
@@ -1934,9 +1948,9 @@ c
           wsigmpro = 9.99
         end if
         k = 156
-        write (Line(IFA(k):IFB(k)),'(F10.3)') wmpro
+        write (OutLine(IFA(k):IFB(k)),'(F10.3)') wmpro
         k = 157
-        write (Line(IFA(k):IFB(k)),'(F13.3)') wsigmpro      
+        write (OutLine(IFA(k):IFB(k)),'(F13.3)') wsigmpro      
         k = 324
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1rchi2_pn
         k = 158
@@ -1944,10 +1958,15 @@ c
         if (w1M+w1M2 .gt. 0) then
           R8tmp1 = (dfloat(w1M)*R8tmp1 + dfloat(w1M2)*R8tmp2)
      +           /  dfloat(w1M+w1M2)
-          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+          write (OutLine(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
         end if                         ! else leave "null"
+      else if (Good1) then
+        OutLine(Ifa(150):IFb(150)) = Line(IFa(150):IFb(150))  ! w1snr_pm
+        OutLine(Ifa(152):IFb(153)) = Line(IFa(152):IFb(153))  ! w1flux_pm &c.
       else if (Good2) then
-        Line(IFA(156):IFB(158)) = Line(IFA(322):IFB(324))
+        OutLine(Ifa(150):IFb(150)) = Line(IFa(316):IFb(316))  ! w1snr_pm
+        OutLine(Ifa(152):IFb(153)) = Line(IFa(318):IFb(319))  ! w1flux_pm &c.
+        OutLine(IFA(156):IFB(158)) = Line(IFA(322):IFB(324))  ! w1mpro_pm &c.
       end if
 c      
       Good1 = GoodCh1 .and. index(Line(IFA(159):IFB(161)),'null') .eq. 0  ! w2mpro_pm-w2rchi2_pm
@@ -1965,9 +1984,9 @@ c
           wsigmpro = 9.99
         end if
         k = 159
-        write (Line(IFA(k):IFB(k)), '(F10.3)') wmpro
+        write (OutLine(IFA(k):IFB(k)), '(F10.3)') wmpro
         k = 160
-        write (Line(IFA(k):IFB(k)), '(F13.3)') wsigmpro
+        write (OutLine(IFA(k):IFB(k)), '(F13.3)') wsigmpro
         k = 327
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2rchi2_pn
         k = 161
@@ -1975,10 +1994,15 @@ c
         if (w2M+w2M2 .gt. 0) then
           R8tmp1 = (dfloat(w2M)*R8tmp1 + dfloat(w2M2)*R8tmp2)
      +           /  dfloat(w2M+w2M2)
-          write (Line(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
+          write (OutLine(IFA(k):IFB(k)), '(1pE11.3)') R8tmp1
         end if                         ! else leave "null"
+      else if (Good1) then
+        OutLine(Ifa(151):IFb(151)) = Line(IFa(151):IFb(151))  ! w2snr_pm
+        OutLine(Ifa(154):IFb(155)) = Line(IFa(154):IFb(155))  ! w2flux_pm &c.
       else if (Good2) then
-        Line(IFA(159):IFB(161)) = Line(IFA(325):IFB(327))
+        OutLine(Ifa(151):IFb(151)) = Line(IFa(317):IFb(317))  ! w2snr_pm
+        OutLine(Ifa(154):IFb(155)) = Line(IFa(320):IFb(321))  ! w2flux_pm &c.
+        OutLine(IFA(159):IFB(161)) = Line(IFA(325):IFB(327))
       end if
 c
       write(EclData(138:139),'(I2)') KodePM
@@ -1996,7 +2020,7 @@ c                                      ! translate ra, dec by PM
 c
       dw1MJD = (dw1MJD + dw2MJD)/2.0
       k = 146
-      Read(Line(IFA(k):IFB(k)), *, err = 1600) pmra
+      Read(OutLine(IFA(k):IFB(k)), *, err = 1600) pmra
       pmra = pmra/1314900.0            ! convert asec/yr to deg/day
       if (dabs(decstat) .ne. 90.0d0) then
         dRA  = pmra*dw1MJD/dcos(d2r*decstat)
@@ -2010,15 +2034,15 @@ c
           ra = 360.0d0 + ra
       end if
       k = 147
-      Read(Line(IFA(k):IFB(k)), *, err = 1600) pmdec
+      Read(OutLine(IFA(k):IFB(k)), *, err = 1600) pmdec
       pmdec = pmdec/1314900.0
       dDec = pmdec*dw1mjd
       dec  = decstat + dDec
 c
       k = 148
-      Read(Line(IFA(k):IFB(k)), *, err = 1600) sigpmra
+      Read(OutLine(IFA(k):IFB(k)), *, err = 1600) sigpmra
       k = 149
-      Read(Line(IFA(k):IFB(k)), *, err = 1600) sigpmdec
+      Read(OutLine(IFA(k):IFB(k)), *, err = 1600) sigpmdec
       sigrastat  = dsqrt(sigrastat**2  + (dw1MJD*sigpmra/365.25)**2)
       sigdecstat = dsqrt(sigdecstat**2 + (dw1MJD*sigpmdec/365.25)**2)
 c                                      ! Get Ecliptic positions
@@ -2043,7 +2067,7 @@ c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Output data row
 c
-1900  write (20,'(a)') Line(1:1555)//dMagData//EclData//ParData
+1900  write (20,'(a)') OutLine(1:1555)//dMagData//EclData//ParData
 c     
       if (nRow .lt. nSrc) go to 1000
       close (20)
