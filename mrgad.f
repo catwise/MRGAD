@@ -64,6 +64,7 @@ c          1.97 B90114: clip negative snr at -999.0
 c          1.98 B90125: buffer input line unchanged, use to restore flux
 c                       values when k1/k2 < 3; add mrgad vsn & run
 c                       date-time header line
+c          1.98 B90126: restore Asce flux even for k1/k2 = 0
 c
 c-----------------------------------------------------------------------
 c
@@ -131,7 +132,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.98 B90125'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.98 B90126'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -950,6 +951,8 @@ c
         if (dbg) print *,
      +     'Bad ascending AND descending W1 Photometry on source'
      +                //Line(IFA(1):IFB(1))
+        OutLine(IFa(20):IFb(20)) = Line(IFa(20):IFb(20))  ! restore Asce flux
+        OutLine(IFa(22):IFb(23)) = Line(IFa(22):IFb(23))        
       end if
       if (Good2) then
         OutLine(IFA(20):IFB(20)) = Line(IFA(186):IFB(186)) ! w1snr
@@ -1090,6 +1093,8 @@ c
         if (dbg) print *,
      +     'Bad ascending AND descending W2 Photometry on source'
      +                //Line(IFA(1):IFB(1))
+        OutLine(IFa(21):IFb(21)) = Line(IFa(21):IFb(21))  ! restore Asce flux
+        OutLine(IFa(24):IFb(25)) = Line(IFa(24):IFb(25))        
       end if
       if (Good2) then
         OutLine(IFA(21):IFB(21))   = Line(IFA(187):IFB(187)) ! w2snr
