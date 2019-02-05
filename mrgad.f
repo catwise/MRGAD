@@ -65,6 +65,7 @@ c          1.98 B90125: buffer input line unchanged, use to restore flux
 c                       values when k1/k2 < 3; add mrgad vsn & run
 c                       date-time header line
 c          1.98 B90126: restore Asce flux even for k1/k2 = 0
+c          1.99 B90204: fix dwmag overflow
 c
 c-----------------------------------------------------------------------
 c
@@ -132,7 +133,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'1.98 B90126'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'1.99 B90204'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -998,6 +999,8 @@ c
       w1rchi2asce(Nw1rchi2asce(k),k) = wrchi2a
       rchi2dwm = dwmpro**2/(v1+v2)
       if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
+      if (dwmpro .lt. -9.999) dwmpro = -9.999
+      if (dwmpro .gt. 99.999) dwmpro = 99.999
       write (dMagData(1:14),'(2F7.3)') dwmpro, rchi2dwm
 c                                      ! TJ Statistics
       if (doTJw1) then
@@ -1147,6 +1150,8 @@ c
       write (OutLine(IFA(k):IFB(k)),'(F10.3)') wsigmpro
       rchi2dwm = dwmpro**2/(v1+v2)
       if (rchi2dwm .gt. 99.999) rchi2dwm = 99.999
+      if (dwmpro .lt. -9.999) dwmpro = -9.999
+      if (dwmpro .gt. 99.999) dwmpro = 99.999
       write (dMagData(15:28),'(2F7.3)') dwmpro, rchi2dwm
 c                                      ! TJ Statistics
       if (doTJw2) then
