@@ -81,6 +81,9 @@ c                       NOTE: we're leaving the F/E formats in place for
 c                             PMRA and PMDec, because writeTABLE also
 c                             has them, and rather than change that,
 c                             we can make the switch in catprep instead.
+c          2.4  B90927: fixed format on sigPMRA; fixed bug that causes
+c                       PM sigmas to be set to floor erroneously when
+c                       km=3
 c
 c-----------------------------------------------------------------------
 c
@@ -151,7 +154,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'2.3  B90906'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'2.4  B90927'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1851,7 +1854,7 @@ c
       write(EclData(108:117),'(1pE10.3)') R8tmp1
       R8tmp1  = (v2*ra+v1*ra2)/(v1+v2)
       R8tmp2  = dsqrt(dabs(v1*v2/(v1+v2)))
-      if (r8tmp2 .lt. 0001) r8tmp2 = 0.0001
+      if (r8tmp2 .lt. 0.0001) r8tmp2 = 0.0001
       k = 146
 c     if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
 c    + then
@@ -1860,7 +1863,7 @@ c     else
 c       write(OutLine(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
 c     end if
       k = 148
-      write(OutLine(IFA(k):IFB(k)),'(F9.5)')   R8tmp2
+      write(OutLine(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
       v1 = sigdec**2
       v2 = sigdec2**2
@@ -1868,7 +1871,7 @@ c
       write(EclData(118:127),'(1pE10.3)') R8tmp1
       R8tmp1 = (v2*dec+v1*dec2)/(v1+v2)
       R8tmp2  = dsqrt(dabs(v1*v2/(v1+v2)))
-      if (r8tmp2 .lt. 0001) r8tmp2 = 0.0001
+      if (r8tmp2 .lt. 0.0001) r8tmp2 = 0.0001
       k = 147
 c     if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
 c    + then
