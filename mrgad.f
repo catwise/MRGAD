@@ -84,6 +84,8 @@ c                             we can make the switch in catprep instead.
 c          2.4  B90927: fixed format on sigPMRA; fixed bug that causes
 c                       PM sigmas to be set to floor erroneously when
 c                       km=3
+c          2.5  B91119: changed pBias default to 0.045
+c          2.5  B91121: commented out provisional w?snr output
 c
 c-----------------------------------------------------------------------
 c
@@ -154,11 +156,11 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'2.4  B90927'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'2.5  B91121'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
-     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.09d0/,
+     +     KodeAst,KodePhot1,KodePhot2,KodePM/4*0/, pBias/0.045d0/,
      +     nBadPM1,nBadPM2,nBadPM/3*0/, NmdetIDerr/0/, ChiSqRat/3.0d0/,
      +     nBadPMCh1,nBadPMCh2/2*0/, nMedDiff/0/, SlashChar/'/'/,
      +     dMagData/'  null   null   null   null  '/, Nw1rchi2asce,
@@ -195,7 +197,7 @@ c
         print *
         print *,'The OPTIONAL flags are:'
         print *,'    -cr maximum chi-square ratio for averaging (3.0)'
-        print *,'    -pb parallax bias correction (asec; 0.09)'
+        print *,'    -pb parallax bias correction (asec; 0.045)'
         print *,'    -t1 lower S/N limit for TJ statistics (9.98)'
         print *,'    -t2 upper S/N limit for TJ statistics (10.02)'
         print *,'    -tf trim fraction for TJ statistics (0.1)'
@@ -856,14 +858,14 @@ c
      +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
           end if
         end if
-        w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)        ! Note: w1snr will be recomputed
-        if (w1snr .gt. 9999.0) w1snr = 9999.0       !       below if fluxes are good
-        if (w1snr .ge. 0.0d0) then
-          write (OutLine(IFA(20):IFB(20)), '(F7.1)') w1snr
-        else
-          OutLine(IFA(20):IFB(20)) = '   null'
-        end if
-      else if (Good2 .and. GoodW1md) then
+c       w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)        ! Note: w1snr will be recomputed
+c       if (w1snr .gt. 9999.0) w1snr = 9999.0       !       below if fluxes are good
+c       if (w1snr .ge. 0.0d0) then                  ! NOTE: commented out because it
+c         write (OutLine(IFA(20):IFB(20)), '(F7.1)') w1snr ! produced w1snr>0, w1flux<0
+c       else
+c         OutLine(IFA(20):IFB(20)) = '   null'
+c       end if
+      else if (Good2 .and. GoodW1md) then 
         OutLine(IFA(20):IFB(20)) = Line(IFA(186):IFB(186))
       end if
 c
@@ -892,13 +894,13 @@ c
      +         .and. ((R8tmp2 .ge. TJsnr1) .and. (R8tmp2 .le. TJsnr2))
           end if
         end if
-        w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)        ! Note: w2snr will be recomputed
-        if (w2snr .gt. 9999.0) w2snr = 9999.0       !       below if fluxes are good
-        if (w2snr .ge. 0.0d0) then
-          write (OutLine(IFA(21):IFB(21)), '(F7.1)') w2snr
-        else
-          OutLine(IFA(21):IFB(21)) = '   null'
-        end if        
+c       w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)        ! Note: w2snr will be recomputed
+c       if (w2snr .gt. 9999.0) w2snr = 9999.0       !       below if fluxes are good
+c       if (w2snr .ge. 0.0d0) then                  ! NOTE: commented out because it
+c         write (OutLine(IFA(21):IFB(21)), '(F7.1)') w2snr ! produced w2snr > 0, w2flux <0 w2snr
+c       else
+c         OutLine(IFA(21):IFB(21)) = '   null'
+c       end if        
       else if (Good2 .and. GoodW2md) then
         OutLine(IFA(21):IFB(21)) = Line(IFA(187):IFB(187))
       end if
@@ -953,7 +955,12 @@ c
         KodePhot1 = 1
       end if
 c
-      Good1 = GoodCh1 .and. index(Line(IFA(24):IFB(25)),  'null') .eq. 0  ! w2flux w2sigflux
+      If (index(OutLine(IFA(22):IFB(22)),'null') .eq. 0) then    ! force null w1snr
+        read (OutLine(IFA(22):IFB(22)),*,err=1242) w1flux        ! if w1flux <= 0
+        if (w1flux .le. 0.0) OutLine(IFA(20):IFB(20)) = '   null'
+      end if
+c
+1242  Good1 = GoodCh1 .and. index(Line(IFA(24):IFB(25)),  'null') .eq. 0  ! w2flux w2sigflux
       Good2 = GoodCh2 .and. index(Line(IFA(190):IFB(191)),'null') .eq. 0  ! w2flux2 w2sigflux2
       KodePhot2 = 0
       if (Good1 .and. Good2 .and. GoodW2ma .and. GoodW2md) then
@@ -1002,9 +1009,14 @@ c
       else if (Good1) then
         KodePhot2 = 1
       end if
+c
+      If (index(OutLine(IFA(24):IFB(24)),'null') .eq. 0) then    ! force null w2snr
+        read (OutLine(IFA(24):IFB(24)),*,err=1244) w2flux        ! if w2flux <= 0
+        if (w2flux .le. 0.0) OutLine(IFA(21):IFB(21)) = '   null'
+      end if
 c                                      ! WPRO Photometry
 c
-      Gotwmpro1 = GoodW1ma .and. index(Line(IFA(26):IFB(27)),  'null') .eq. 0 ! w1mpro w1sigmpro
+1244  Gotwmpro1 = GoodW1ma .and. index(Line(IFA(26):IFB(27)),  'null') .eq. 0 ! w1mpro w1sigmpro
       Gotwmpro2 = GoodW1md .and. index(Line(IFA(192):IFB(194)),'null') .eq. 0 ! w1mprp w1sigmprp
       if (Good1 .and. Good2 .and. Gotwmpro1 .and. Gotwmpro2) go to 1250
       dMagData = '  null   null   null   null  '
@@ -1928,13 +1940,13 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w1snr_pn
         k = 150
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w1snr_pm
-        w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (w1snr .gt. 9999.0) w1snr = 9999.0
-        if (w1snr .ge. 0.0d0) then
-          write (OutLine(IFA(k):IFB(k)), '(F9.1)') w1snr
-        else
-          OutLine(IFA(k):IFB(k)) = '     null'
-        end if
+c       w1snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+c       if (w1snr .gt. 9999.0) w1snr = 9999.0
+c       if (w1snr .ge. 0.0d0) then
+c         write (OutLine(IFA(k):IFB(k)), '(F9.1)') w1snr
+c       else
+c         OutLine(IFA(k):IFB(k)) = '     null'
+c       end if
       else if (Good2) then
         OutLine(IFA(150):IFB(150)) = Line(IFA(316):IFB(316))
       end if
@@ -1946,13 +1958,13 @@ c
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  ! w2snr_pn
         k = 151
         read (Line(IFA(k):IFB(k)), *, err = 3006) R8tmp1  ! w2snr_pm
-        w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
-        if (w2snr .gt. 9999.0) w2snr = 9999.0
-        if (w2snr .ge. 0.0d0) then
-          write (OutLine(IFA(k):IFB(k)), '(F9.1)') w2snr
-        else
-          OutLine(IFA(k):IFB(k)) = '     null'
-        end if
+c       w2snr = dsqrt(R8tmp1**2 + R8tmp2**2)
+c       if (w2snr .gt. 9999.0) w2snr = 9999.0
+c       if (w2snr .ge. 0.0d0) then
+c         write (OutLine(IFA(k):IFB(k)), '(F9.1)') w2snr
+c       else
+c         OutLine(IFA(k):IFB(k)) = '     null'
+c       end if
       else if (Good2) then
         OutLine(IFA(151):IFB(151)) = Line(IFA(317):IFB(317))
       end if
