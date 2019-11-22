@@ -85,7 +85,8 @@ c          2.4  B90927: fixed format on sigPMRA; fixed bug that causes
 c                       PM sigmas to be set to floor erroneously when
 c                       km=3
 c          2.5  B91119: changed pBias default to 0.045
-c          2.5  B91121: commented out provisional w?snr output
+c          2.5  B91121: commented out provisional w?snr output; added
+c                       code to force w?snr to "null" if w?flux <= 0
 c
 c-----------------------------------------------------------------------
 c
