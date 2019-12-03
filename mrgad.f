@@ -87,6 +87,9 @@ c                       km=3
 c          2.5  B91119: changed pBias default to 0.045
 c          2.5  B91121: commented out provisional w?snr output; added
 c                       code to force w?snr to "null" if w?flux <= 0
+c          2.6  B91203: fixed format overflow on PMRA, also trapped on
+c                       sigPMRA and sigPMDec, although those have not
+c                       happened
 c
 c-----------------------------------------------------------------------
 c
@@ -157,7 +160,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'2.5  B91121'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'2.6  B91203'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1869,12 +1872,10 @@ c
       R8tmp2  = dsqrt(dabs(v1*v2/(v1+v2)))
       if (r8tmp2 .lt. 0.0001) r8tmp2 = 0.0001
       k = 146
-c     if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
-c    + then
-        write(OutLine(IFA(k):IFB(k)),'(F10.5)')   R8tmp1  ! PMRA
-c     else
-c       write(OutLine(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
-c     end if
+      if (R8tmp1 .gt.  99.99999) R8tmp1 =  99.99999
+      if (R8tmp1 .lt. -99.99999) R8tmp1 = -99.99999
+      if (R8tmp2 .gt.  99.9999)  R8tmp2 =  99.9999
+      write(OutLine(IFA(k):IFB(k)),'(F10.5)')   R8tmp1  ! PMRA
       k = 148
       write(OutLine(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
@@ -1886,12 +1887,10 @@ c
       R8tmp2  = dsqrt(dabs(v1*v2/(v1+v2)))
       if (r8tmp2 .lt. 0.0001) r8tmp2 = 0.0001
       k = 147
-c     if ((abs(R8tmp1) .ge. 0.01) .and. (abs(R8tmp1) .le. 999.9999))
-c    + then
-c       write(OutLine(IFA(k):IFB(k)),'(F10.4)')   R8tmp1  ! PMDec
-c     else
-        write(OutLine(IFA(k):IFB(k)),'(1pE10.2)') R8tmp1
-c     end if
+      if (R8tmp1 .gt.  99.99999) R8tmp1 =  99.99999
+      if (R8tmp1 .lt. -99.99999) R8tmp1 = -99.99999
+      if (R8tmp2 .gt.  99.9999)  R8tmp2 =  99.9999
+      write(OutLine(IFA(k):IFB(k)),'(F10.5)')   R8tmp1  ! PMDec
       k = 149
       write(OutLine(IFA(k):IFB(k)),'(F9.4)')   R8tmp2
 c
