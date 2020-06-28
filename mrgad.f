@@ -90,6 +90,7 @@ c                       code to force w?snr to "null" if w?flux <= 0
 c          2.6  B91203: fixed format overflow on PMRA, also trapped on
 c                       sigPMRA and sigPMDec, although those have not
 c                       happened
+c          2.7  C00628: fixed w?flg overwriting w?sigm
 c
 c-----------------------------------------------------------------------
 c
@@ -160,7 +161,7 @@ c
       Real*4         MedDiff(4), MedRchi2(9,20), TrFrac, TJsnr1, TJsnr2,
      +               rchisq, GaLong, GaLat
 c
-      Data Vsn/'2.6  B91203'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
+      Data Vsn/'2.7  C00628'/, nSrc/0/, nRow/0/, d2r/1.745329252d-2/,
      +     dbg,GotIn,GotOut,GotInA,GotInD/5*.false./, doTJhist/.false./,
      +     nBadAst1,nBadAst2,nBadW1Phot1,nBadW1Phot2,nBadAst,
      +     nBadW1Phot,nBadW2Phot1,nBadW2Phot2,nBadW2Phot/9*0/,
@@ -1297,6 +1298,7 @@ c       v1 = (R8tmp1 + R8tmp2)/2.0
         k = 41
         write(OutLine(IFA(k):IFB(k)),'(F7.3)') v1
         Itmp1 = IOR(Itmp1,Itmp2)
+        k = 42
         write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
         k = 209
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w1Cov2
@@ -1345,6 +1347,7 @@ c       v1 = (R8tmp1 + R8tmp2)/2.0
         k = 46
         write(OutLine(IFA(k):IFB(k)),'(F7.3)') v1
         Itmp1 = IOR(Itmp1,Itmp2)
+        k = 47
         write(OutLine(IFA(k):IFB(k)),'(I6)') Itmp1
         k = 214
         read(Line(IFA(k):IFB(k)), *, err = 3006) R8tmp2  !  w2Cov2
